@@ -1,0 +1,2 @@
+PKG_CFLAGS = -fopenmp -I/usr/include 
+PKG_LIBS = -lm  -lR -lgomp -lgsl
