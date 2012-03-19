@@ -111,10 +111,10 @@ void PMA_mcmc_MS(double *Y, double *hyper_parms, int *pstart,
 	double *Omega, *Theta;
 	int **ProbSum;
 	int **Gamma;
-	double *Mu, *Z;
+	double *Mu;
 	double *A, *B, *P, *Sig2, *D;
 
-	int accept_m = 0, accept_c = 0, accept_a = 0;
+	int accept_m = 0, accept_c = 0;
 
 	double a_0, b_0, lambda_a, lambda_b, tau, alpha_0, beta_0, m_0, v_0;
 	double r_a, r_b, kappa;
@@ -800,7 +800,7 @@ int update_position_p1(double **Exprs, double *Omega, double **Alpha, int **Gamm
 		int ind_pep, int MRF)
 {
 	double s_log_w = 0.0, s_log_1minus_w = 0.0;
-	double ratio, frac, R;
+	double frac, R;
 
 	int c, S_p = 0, i;
 	int num_x = 2;
@@ -815,7 +815,7 @@ int update_position_p1(double **Exprs, double *Omega, double **Alpha, int **Gamm
 			Omega[p_begin + c] = Omega[p_begin + c] - .0000001;
 			//Rprintf("Omega essentially 1. Slightly reducing for numerical considerations\n");
 		}
-		if((Omega[p_begin + c] > ZZERO) & (1.0 - Omega[p_begin + c]) > ZZERO)
+		if((Omega[p_begin + c] > ZZERO) & ((1.0 - Omega[p_begin + c]) > ZZERO))
 		{
 			s_log_w += log(Omega[p_begin + c]);
 			s_log_1minus_w += log1p(-1.0*Omega[p_begin + c]);
