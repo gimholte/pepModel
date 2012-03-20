@@ -1,2 +1,2 @@
 PKG_CFLAGS = -fopenmp -I/usr/include 
-PKG_LIBS = -lm  -lR -lgomp -lgsl
+PKG_LIBS = -lm  -L/usr/local/lib/R/lib -lR -lgomp -L/usr/lib -lgsl -lgslcblas
