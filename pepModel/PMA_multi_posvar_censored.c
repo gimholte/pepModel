@@ -58,8 +58,8 @@ void update_lambdas(double *lambda_a, double *lambda_b, double r_a,
 		double r_b, double *A, double *B, int n_position,
 		RngStream rng);
 
-void update_thetas(double *P, double *Theta, double *Omega,
-		double kappa, int *pnum, int *pstart, int *n_position, int *accept, RngStream rng);
+void update_MRF(double *P, double *Theta, double *Omega,
+		double *kappa, int *pnum, int *pstart, int *n_position, int *accept, RngStream rng);
 
 void update_prob_include(int *n_peptide, int *n_indiv, int **Gamma, int **ProbSum, double *mean_fitted,
 		double **Alpha, double *Mu, double n);
@@ -72,7 +72,7 @@ void update_data(double *D, int cen_num, int* cen_ind, int* cen_pep, double *Y, 
 		double **Alpha, double *Mu, int n_peptide, double *Sig2, int *cen_pos);
 
 void store_mcmc_output1(double *Mu, double *A, double *B, double *P, double *Sig2, double *D,
-		double *Theta,
+		double *Theta, double kappa,
 		double m, double c_var, int *n_peptide, int *n_indiv, int *n_position, int *cen_num,
 		double lambda_a, double lambda_b, int MRF, int ind_pep,
 		FILE *AFILE, FILE *BFILE, FILE *PFILE, FILE *VARFILE, FILE *Sig2FILE, FILE *MUFILE,
@@ -292,8 +292,8 @@ void PMA_mcmc_MS(double *Y, double *hyper_parms, int *pstart,
 		// update MRF if applicable
 		if(*MRF == 1)
 		{
-			update_thetas(P, Theta, Omega,
-					kappa, pnum, pstart, n_position, accept, rng[0]);
+			update_MRF(P, Theta, Omega,
+					&kappa, pnum, pstart, n_position, accept, rng[0]);
 		}
 
 		if((i > *n_burn) && ((i - *n_burn) % (*n_sweep) == 0 ))
@@ -303,7 +303,7 @@ void PMA_mcmc_MS(double *Y, double *hyper_parms, int *pstart,
 					Alpha, Mu, n);
 			if(*write == 1)
 			{
-				store_mcmc_output1(Mu, A, B, P, Sig2, D, Theta,
+				store_mcmc_output1(Mu, A, B, P, Sig2, D, Theta, kappa,
 						m, c_var, n_peptide, n_indiv, n_position, cen_num,
 						lambda_a, lambda_b, *MRF, *ind_pep,
 						AFILE, BFILE, PFILE, VARFILE, Sig2FILE, MUFILE, DFILE,
@@ -383,7 +383,7 @@ void finalize_prob_include(int *n_iter, int *n_peptide, int *n_indiv, double *Ou
 }
 
 void store_mcmc_output1(double *Mu, double *A, double *B, double *P, double *Sig2, double *D,
-		double *Theta,
+		double *Theta, double kappa,
 		double m, double c_var, int *n_peptide, int *n_indiv, int *n_position, int *cen_num,
 		double lambda_a, double lambda_b, int MRF, int ind_pep,
 		FILE *AFILE, FILE *BFILE, FILE *PFILE, FILE *VARFILE, FILE *Sig2FILE, FILE *MUFILE,
@@ -437,8 +437,8 @@ void store_mcmc_output1(double *Mu, double *A, double *B, double *P, double *Sig
 	fprintf(PFILE, "\n");
 	fprintf(Sig2FILE, "\n");
 	fprintf(MUFILE, "\n");
-	fprintf(VARFILE, "%.5lf \t %.5lf \t %.5lf \t %.5lf \n", m, c_var,
-			lambda_a, lambda_b);
+	fprintf(VARFILE, "%.5lf \t %.5lf \t %.5lf \t %.5lf \t %.5lf \n", m, c_var,
+			lambda_a, lambda_b, kappa);
 	return;
 }
 
@@ -565,31 +565,41 @@ void InitializeChain1(double *Omega, double **Alpha, int **Gamma,
 	return;
 }
 
-void update_thetas(double *P, double *Theta, double *Omega,
-		double kappa, int *pnum, int *pstart, int *n_position, int *accept, RngStream rng)
+void update_MRF(double *P, double *Theta, double *Omega,
+		double *kappa, int *pnum, int *pstart, int *n_position, int *accept, RngStream rng)
 {
 	//Rprintf("entering MRF update \n");
 	int S_p = 0;
 	int p,c;
-	double theta_prop, log_ratio, M;
+	double theta_prop, log_ratio, M, S = 0, shape;
 
-	for(p = 1; p < (*n_position - 1); p++)
+	for(p = 0; p < (*n_position); p++)
 	{
-		//Rprintf("entered for loop 1 \n");
 		for(c = 0; c < pnum[p]; c++)
 		{
-			//Rprintf("entered for loop 2 pnum1 = %d\n", pnum[p]);
 			if(Omega[pstart[p] + c] > 0.0)
 			{
 				S_p ++;
 			}
 		}
-		//Rprintf("S_p = %d \n", S_p);
-		theta_prop = Theta[p] + 2.0*(RngStream_RandU01(rng)*2.0 - 1.0)/sqrt(kappa);
-		//Rprintf("proposal = %.4lf \n", theta_prop);
-		M = (Theta[p-1] + Theta[p+1])/2.0;
-		log_ratio = (kappa/2.0)*(gsl_pow_2(Theta[p]) - gsl_pow_2(theta_prop)) +
-				kappa*M*(theta_prop - Theta[p]) +
+
+		theta_prop = Theta[p] + 2.0*(RngStream_RandU01(rng)*2.0 - 1.0)/sqrt(*kappa);
+
+		if(p == 0)
+		{
+			M = Theta[1];
+		}
+		else if(p == (*n_position - 1))
+		{
+			M = Theta[*n_position - 2];
+		}
+		else
+		{
+			M = (Theta[p-1] + Theta[p+1])/2.0;
+		}
+
+		log_ratio = (*kappa/2.0)*(gsl_pow_2(Theta[p]) - gsl_pow_2(theta_prop)) +
+				*kappa*M*(theta_prop - Theta[p]) +
 				(double)(pnum[p] - S_p)*(theta_prop - Theta[p]) +
 				(double)(pnum[p])*(log1p(exp(Theta[p])) - log1p(exp(theta_prop)));
 		if(log(RngStream_RandU01(rng)) <= log_ratio)
@@ -600,10 +610,19 @@ void update_thetas(double *P, double *Theta, double *Omega,
 		}
 		S_p = 0;
 	}
+
+	for(p = 0; p < *n_position - 1; p++)
+	{
+		S += gsl_pow_2(Theta[p]) - Theta[p]*Theta[p+1];
+	}
+	S += gsl_pow_2(Theta[*n_position]);
+	S += .5;
+	shape = ((double)(*n_position) + 1.0)/2.0;
+
+	*kappa = RngStream_GA1(shape, rng)/S;
+
 	return;
 }
-
-
 
 void update_global_parms(double **Alpha, int **Gamma, double *m, double *c_var,
 		double *A, double *B, double m_0, double v_0, int lambda_prior,
@@ -661,7 +680,8 @@ void update_global_parms(double **Alpha, int **Gamma, double *m, double *c_var,
 
 	// log-scale random walk proposal
 	d_prime = n_alpha/2.0 + 0.5;
-	c_prop = *c_var*exp(RngStream_RandU01(rng)*1.0 - .5);
+	c_prop = *c_var*exp((RngStream_RandU01(rng)*1.0 - .5)/
+			sqrt((double)(*n_alpha)));
 
 	log_DF_ratio = pnorm(0.0, (*m), sqrt(*c_var), 0, 1);
 	log_DF_ratio = log_DF_ratio - pnorm(0.0, (*m), sqrt(c_prop), 0, 1);
