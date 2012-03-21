@@ -907,7 +907,9 @@ int update_position_p1(double **Exprs, double *Omega, double **Alpha, int **Gamm
 	{
 		P[p] = RngStream_Beta(a_0 + (double)(pnum[p] - S_p), b_0 + (double)(S_p), rng);
 	}
-	frac = beta(A[p], (double)(*n_indiv) + B[p])/beta(A[p], B[p]);
+
+	frac = lbeta(A[p], (double)(*n_indiv) + B[p])- lbeta(A[p], B[p]);
+	frac = exp(frac);
 
 	// update Omegas
 	for(c = 0; c < pnum[p]; c++)
