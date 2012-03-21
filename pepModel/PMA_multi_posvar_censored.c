@@ -48,7 +48,7 @@ void update_global_parms(double **Alpha, int **Gamma, double *m, double *c_var,
 		double *A, double *B, double m_0, double v_0, int lambda_prior,
 		double *lambda_a, double *lambda_b, double r_a, double r_b,
 		int n_position, int n_peptide, int n_indiv, int *accept_m,
-		int *accept_c, RngStream rng);
+		int *accept_c, RngStream rng, double adptm, double adptv);
 
 double expit(double x);
 
@@ -193,6 +193,8 @@ void PMA_mcmc_MS(double *Y, double *hyper_parms, int *pstart,
 	double c_var = 1.0;
 	double alpha = 1.0;
 	double beta = 1.0;
+	double adptm = 5.0;
+	double adptv = 1.0;
 
 	FILE *AFILE, *BFILE, *PFILE, *VARFILE, *Sig2FILE, *MUFILE, *DFILE, *THETAFILE;
 
@@ -248,8 +250,11 @@ void PMA_mcmc_MS(double *Y, double *hyper_parms, int *pstart,
 		if((i%1000 == 0) & (i > 0) & (*silent == 0))
 		{
 			Rprintf("***** iteration %d ***** \n", i);
-			Rprintf("m acceptance prob = %f\n", (double)(accept_m)/(double)(i));
-			Rprintf("c acceptance prob = %f\n", (double)(accept_c)/(double)(i));
+			if(i > *n_burn)
+			{
+				Rprintf("m acceptance prob = %f\n", (double)(accept_m)/(double)(i - *n_burn));
+				Rprintf("c acceptance prob = %f\n", (double)(accept_c)/(double)(i - *n_burn));
+			}
 		}
 
 		R_CheckUserInterrupt();
@@ -258,7 +263,7 @@ void PMA_mcmc_MS(double *Y, double *hyper_parms, int *pstart,
 				m_0, v_0,
 				*lambda_prior, &lambda_a, &lambda_b, r_a, r_b,
 				*n_position, *n_peptide, *n_indiv, &accept_m,
-				&accept_c, rng[0]);
+				&accept_c, rng[0], adptm, adptv);
 
 
 #pragma omp parallel private(th_id, workspace) num_threads(*nP)
@@ -309,6 +314,33 @@ void PMA_mcmc_MS(double *Y, double *hyper_parms, int *pstart,
 						AFILE, BFILE, PFILE, VARFILE, Sig2FILE, MUFILE, DFILE,
 						THETAFILE);
 			}
+		}
+
+		// adaptation increment
+		if(i < *n_burn & (i % 50 == 0))
+		{
+			if(accept_c > 24)
+			{
+				adptv = adptv + 1.0;
+			}
+			else if(accept_c < 5)
+			{
+				adptv = adptv/2.0;
+			}
+			accept_c = 0;
+		}
+
+		if(i < *n_burn & (i % 50 == 0))
+		{
+			if(accept_m > 24)
+			{
+				adptm = adptm + .1;
+			}
+			else if(accept_m < 5)
+			{
+				adptm = adptm - fmin(.1, adptm/2.0);
+			}
+			accept_m = 0;
 		}
 	}
 
@@ -628,7 +660,7 @@ void update_global_parms(double **Alpha, int **Gamma, double *m, double *c_var,
 		double *A, double *B, double m_0, double v_0, int lambda_prior,
 		double *lambda_a, double *lambda_b, double r_a, double r_b,
 		int n_position, int n_peptide, int n_indiv, int *accept_m,
-		int *accept_c, RngStream rng)
+		int *accept_c, RngStream rng, double adptm, double adptv)
 {
 	double n_alpha = 0.0;
 	double sum_alpha = 0.0;
@@ -651,7 +683,7 @@ void update_global_parms(double **Alpha, int **Gamma, double *m, double *c_var,
 
 	//update m
 	v_prime = (*c_var*v_0)/(*c_var + v_0*n_alpha);
-	m_prop = *m + (RngStream_RandU01(rng)*2.0 - 1.0)*sqrt(v_prime)*5; //sqrt(v_prime)*rnorm(0.0,1.0);
+	m_prop = *m + (RngStream_RandU01(rng)*2.0 - 1.0)*sqrt(v_prime)*adptm; //sqrt(v_prime)*rnorm(0.0,1.0);
 	log_DF_ratio = pnorm(0.0, (*m), sqrt(*c_var), 0, 1);
 	log_DF_ratio = log_DF_ratio - pnorm(0.0, m_prop, sqrt(*c_var), 0, 1);
 	log_DF_ratio = (double)(n_alpha)*log_DF_ratio;
@@ -680,8 +712,8 @@ void update_global_parms(double **Alpha, int **Gamma, double *m, double *c_var,
 
 	// log-scale random walk proposal
 	d_prime = n_alpha/2.0 + 0.5;
-	c_prop = *c_var*exp((RngStream_RandU01(rng)*1.0 - .5)/
-			sqrt((double)(*n_alpha)));
+	c_prop = *c_var*exp(adptv*(RngStream_RandU01(rng)*1.0 - .5)/
+			sqrt((double)(n_alpha)));
 
 	log_DF_ratio = pnorm(0.0, (*m), sqrt(*c_var), 0, 1);
 	log_DF_ratio = log_DF_ratio - pnorm(0.0, (*m), sqrt(c_prop), 0, 1);
