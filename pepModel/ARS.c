@@ -25,6 +25,7 @@
 #include <gsl/gsl_sf.h>
 
 // function to test the sampler, not used in main function.
+/*
 void sample_one(double* start_val, int* n_max, double* S_j, double* c, double* R, double* out,
 		double* eps)
 {
@@ -50,6 +51,7 @@ void sample_one(double* start_val, int* n_max, double* S_j, double* c, double* R
 
 	return;
 }
+*/
 
 /* Reference:
  * Gilks and Wild (1992)
@@ -88,8 +90,8 @@ void sample_one(double* start_val, int* n_max, double* S_j, double* c, double* R
 
 
 // returns -1.0 if an error is detected.
-double sample_conditional(double* x, int* num_x, int nmax, double S_j, double c, double R, ARS_workspace *space,
-		RngStream rng, double eps)
+double sample_conditional(double* x, int* num_x, int nmax, double* argvec, ARS_workspace *space,
+		RngStream rng, double eps, double (*h)(double, double *), double (*h_prime)(double , double *))
 {
 	int i, u_section, l_section;
 	int accept = 0;
@@ -97,11 +99,13 @@ double sample_conditional(double* x, int* num_x, int nmax, double S_j, double c,
 	double x_samp, W, l, u, hnew, hpnew, zlower, zupper, V;
 	double huzmax, test1, test2, tmp0, tmp1;
 
+	// Rprintf("%lf, %lf, %lf \n", argvec[0], argvec[1], argvec[2]);
 	// intialize the lattice
 	for(i = 0; i < *num_x; i++)
 	{
-		space->hwv[i] = h(x[i], S_j, c, R);
-		space->hpwv[i] = h_prime(x[i], S_j, c, R);
+		space->hwv[i] = h(x[i], argvec);
+		space->hpwv[i] = h_prime(x[i], argvec);
+	//	Rprintf("x = %lf, h(x) = %.3lf \n", x[i], h(x[i], argvec));
 	}
 
 	// need last hpwv  < 0, move x_last farther out until this is so. This only works with
@@ -110,10 +114,10 @@ double sample_conditional(double* x, int* num_x, int nmax, double S_j, double c,
 	while(space->hpwv[*num_x-1] >= 0)
 	{
 		x[*num_x - 1] = x[*num_x - 1] + 2.0;
-		space->hpwv[*num_x - 1] = h_prime(x[*num_x - 1], S_j, c, R);
+		space->hpwv[*num_x - 1] = h_prime(x[*num_x - 1], argvec);
 
 	}
-	space->hwv[*num_x - 1] = h(x[*num_x - 1], S_j, c, R);
+	space->hwv[*num_x - 1] = h(x[*num_x - 1], argvec);
 
 	//now calculate intersection of lines, z
 	// i-th element corresponds to intersection to right of x[i]
@@ -170,7 +174,7 @@ double sample_conditional(double* x, int* num_x, int nmax, double S_j, double c,
 			{
 				Rprintf("z_%d = %lf\n", i, space->z[i]);
 			}
-			Rprintf("R = %lf, S_j = %lf, c = %lf\n", R, S_j, c);
+			Rprintf("R = %lf, S_j = %lf, c = %lf\n", argvec);
 			Rprintf("x_samp = %lf \n", x_samp);
 			return(-1.0);
 		}
@@ -214,7 +218,7 @@ double sample_conditional(double* x, int* num_x, int nmax, double S_j, double c,
 					{
 						Rprintf("z_%d = %lf\n", i, space->z[i]);
 					}
-					Rprintf("R = %lf, S_j = %lf, c = %lf\n", R, S_j, c);
+					Rprintf("R = %lf, S_j = %lf, c = %lf\n", argvec);
 					Rprintf("x_samp = %lf \n", x_samp);
 
 				}
@@ -224,7 +228,7 @@ double sample_conditional(double* x, int* num_x, int nmax, double S_j, double c,
 			// and compare directly to outer hull.
 			else
 			{
-				hnew = h(x_samp, S_j, c, R);
+				hnew = h(x_samp, argvec);
 				if(log(W) <= (hnew - u))
 				{
 					tmp0 = sample_hull(x, space, num_x, &u_section, .15, &huzmax);
@@ -242,15 +246,15 @@ double sample_conditional(double* x, int* num_x, int nmax, double S_j, double c,
 						{
 							Rprintf("z_%d = %lf\n", i, space->z[i]);
 						}
-						Rprintf("R = %lf, S_j = %lf, c = %lf\n", R, S_j, c);
+						//Rprintf("R = %lf, S_j = %lf, c = %lf\n", argvec);
 						Rprintf("x_samp = %lf \n", x_samp);
 					}
 					return(x_samp);
 				}
 				else
 				{
-					update = update_hull(x, space, num_x, nmax,
-							x_samp, hnew, l_section, R, S_j, c, &huzmax);
+					update = update_hull(x, space, argvec, num_x, nmax,
+							x_samp, hnew, l_section, &huzmax, h, h_prime);
 					// if update == 1 we added a new point to the lattice
 					if(update == 1)
 					{
@@ -265,7 +269,7 @@ double sample_conditional(double* x, int* num_x, int nmax, double S_j, double c,
 		{
 			// we're on either the left or right edge or the
 			// hull when sampling here
-			hnew = h(x_samp, S_j, c, R);
+			hnew = h(x_samp, argvec);
 			if(log(W) <= (hnew - u))
 			{
 				// sample accepted
@@ -284,15 +288,14 @@ double sample_conditional(double* x, int* num_x, int nmax, double S_j, double c,
 					{
 						Rprintf("z_%d = %lf\n", i, space->z[i]);
 					}
-					Rprintf("R = %lf, S_j = %lf, c = %lf\n", R, S_j, c);
 					Rprintf("x_samp = %lf \n", x_samp);
 				}
 				return(x_samp);
 			}
 			else
 			{
-				update = update_hull(x, space, num_x, nmax,
-						x_samp, hnew, l_section, R, S_j, c, &huzmax);
+				update = update_hull(x, space, argvec, num_x, nmax,
+						x_samp, hnew, l_section, &huzmax, h, h_prime);
 				// if update == 1 we added a new point to the lattice
 				// and we must re-normalize the outer hull
 				if(update == 1)
@@ -306,9 +309,9 @@ double sample_conditional(double* x, int* num_x, int nmax, double S_j, double c,
 }
 
 // insert a new abcissae in the hull, update the Z and
-int update_hull(double *x, ARS_workspace *space, int *num_x, int nmax,
-		double xnew, double hnew, int l_section,
-		double R, double S_j, double c, double *huzmax)
+int update_hull(double *x, ARS_workspace *space, double *argvec, int *num_x, int nmax,
+		double xnew, double hnew, int l_section, double *huzmax,
+		double (*h)(double, double *), double (*h_prime)(double , double *))
 {
 	if(nmax == *num_x)
 	{
@@ -320,7 +323,7 @@ int update_hull(double *x, ARS_workspace *space, int *num_x, int nmax,
 	double hpnew, test2, test1;
 	int i;
 
-	hpnew = h_prime(xnew, S_j, c, R);
+	hpnew = h_prime(xnew, argvec);
 	// we are past l_section, so x_samp goes between
 	// x[l_section - 1] and x[l_section]
 	if(l_section == 0)
@@ -482,28 +485,6 @@ void initialize_hull(double *x, ARS_workspace *space, int* num_x, double *huzmax
 		space->scum_norm[i] = (space->scum[i])/(space->scum[*num_x - 1]);
 	}
 	return;
-}
-
-
-// h is the log-density of our target distribution
-double h(double x, double S_j, double c, double R)
-{
-	double out;
-	out = -1.0*x*R + S_j*lgamma(x + c) - S_j*lgamma(x) + R;
-
-	//gamma test distribution
-//	  out = .001*log(x) - x/.1;
-	return(out);
-}
-
-double h_prime(double x, double S_j, double c, double R)
-{
-	double out;
-	out = -1.0*R + S_j*gsl_sf_psi(x + c) - S_j*gsl_sf_psi(x);
-
-	//gamma test distribution, derivative.
-//	out = .001/x - 10.0;
-	return(out);
 }
 
 

@@ -26,6 +26,10 @@
 #define ZZERO 2.0e-308
 
 //
+double lc_AB(double x, double *argvec);
+
+double lcp_AB(double x, double *argvec);
+
 void update_indiv_j1(double *Exprs, double *Alpha, double *mu_j, double *Omega, int *Gamma,
 		double *Sig2, double m, double c_var, double tau_0, int *pnum, int *pstart,
 		int *n_position, int *n_peptide, int ind_pep, RngStream rng);
@@ -118,6 +122,8 @@ void PMA_mcmc_MS(double *Y, double *hyper_parms, int *pstart,
 
 	double a_0, b_0, lambda_a, lambda_b, tau, alpha_0, beta_0, m_0, v_0;
 	double r_a, r_b, kappa;
+
+
 
 	a_0 = hyper_parms[0];
 	b_0 = hyper_parms[1];
@@ -319,7 +325,7 @@ void PMA_mcmc_MS(double *Y, double *hyper_parms, int *pstart,
 		// adaptation increment
 		if(i < *n_burn & (i % 50 == 0))
 		{
-			if(accept_c > 24)
+			if(accept_c > 15)
 			{
 				adptv = adptv + 1.0;
 			}
@@ -332,7 +338,7 @@ void PMA_mcmc_MS(double *Y, double *hyper_parms, int *pstart,
 
 		if(i < *n_burn & (i % 50 == 0))
 		{
-			if(accept_m > 24)
+			if(accept_m > 15)
 			{
 				adptm = adptm + .1;
 			}
@@ -858,6 +864,8 @@ int update_position_p1(double **Exprs, double *Omega, double **Alpha, int **Gamm
 	int num_x = 2;
 	int p_begin = pstart[p];
 	double N_cp = 0.0;
+	double argvec[3];
+
 
 	// update A's and B's
 	for(c = 0; c < pnum[p]; c++)
@@ -883,9 +891,12 @@ int update_position_p1(double **Exprs, double *Omega, double **Alpha, int **Gamm
 	else
 	{
 		R = (lambda_a - s_log_w);
+		argvec[2] = R;
+		argvec[0] = (double)S_p;
+		argvec[1] = B[p];
 		//Rprintf("%lf", R);
-		A[p] = sample_conditional(xA, &num_x, nmax, (double)S_p, B[p], R,
-				workspace, rng, eps);
+		A[p] = sample_conditional(xA, &num_x, nmax, argvec,
+				workspace, rng, eps, lc_AB, lcp_AB);
 
 		if(A[p] == -1.0)
 		{
@@ -894,9 +905,11 @@ int update_position_p1(double **Exprs, double *Omega, double **Alpha, int **Gamm
 
 		num_x = 2;
 		R = (lambda_b - s_log_1minus_w);
+		argvec[2] = R;
+		argvec[1] = A[p];
 		//Rprintf("%lf\n", R);
-		B[p] = sample_conditional(xB, &num_x, nmax, (double)S_p, A[p], R,
-				workspace, rng, eps);
+		B[p] = sample_conditional(xB, &num_x, nmax, argvec,
+				workspace, rng, eps, lc_AB, lcp_AB);
 		if(B[p] == -1.0)
 		{
 			return(0);
@@ -1064,5 +1077,25 @@ void tnorm_test(double* x, int *n, double *m, double *sigmasqr)
 		PutRNGstate();
 	}
 	return;
+}
+
+double lc_AB(double x, double *argvec)
+{
+	double out, R, S_j, c;
+	out = -1.0*x*argvec[2] + argvec[0]*lgamma(x + argvec[1]) - argvec[0]*lgamma(x) + argvec[2];
+
+	//gamma test distribution
+//	  out = .001*log(x) - x/.1;
+	return(out);
+}
+
+double lcp_AB(double x, double *argvec)
+{
+	double out;
+	out = -1.0*argvec[2] + argvec[0]*gsl_sf_psi(x + argvec[1]) - argvec[0]*gsl_sf_psi(x);
+
+	//gamma test distribution, derivative.
+//	out = .001/x - 10.0;
+	return(out);
 }
 

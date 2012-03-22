@@ -41,18 +41,14 @@ typedef struct ARS_WORKSPACE ARS_workspace;
 #include <gsl/gsl_math.h>
 #include <gsl/gsl_sf.h>
 
-double sample_conditional(double* x, int* num_x, int nmax, double S_j, double c, double R, ARS_workspace *space,
-		RngStream rng, double eps);
+double sample_conditional(double* x, int* num_x, int nmax, double* argvec, ARS_workspace *space,
+		RngStream rng, double eps, double (*h)(double x, double *args), double (*h_prime)(double x, double *args));
 
-int update_hull(double *x, ARS_workspace *space, int *num_x, int nmax,
-		double xnew, double hnew, int l_section,
-		double R, double S_j, double c, double *huzmax);
+int update_hull(double *x, ARS_workspace *space, double *argvec, int *num_x, int nmax,
+		double xnew, double hnew, int l_section, double *huzmax,
+		double (*h)(double, double *), double (*h_prime)(double, double *));
 
 double sample_hull(double *x, ARS_workspace *space, int* num_x, int *section, double p, double *huzmax);
 
 void initialize_hull(double *x, ARS_workspace *space, int* num_x, double* huzmax);
-
-double h_prime(double x, double S_j, double c, double R);
-
-double h(double x, double S_j, double c, double R);
 
