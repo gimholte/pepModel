@@ -8,7 +8,7 @@
 #ifndef ARS_H_
 #define ARS_H_
 
-#define NMAX 10
+#define NMAX 100
 
 struct ARS_WORKSPACE{
 	double hwv[NMAX];
