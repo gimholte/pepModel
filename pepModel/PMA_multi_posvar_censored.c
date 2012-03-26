@@ -375,6 +375,7 @@ void PMA_mcmc_MS(double *Y, double *hyper_parms, int *pstart,
 	free(P);
 	free(Sig2);
 	free(Mu);
+	free(xAlpha);
 
 	if(*MRF == 1)
 	{
