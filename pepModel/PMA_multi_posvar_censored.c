@@ -52,9 +52,9 @@ void update_var_pars(double *Sig2, double *alpha, double *beta,
 
 void update_indiv_j1(double *Exprs, double *Alpha, double *mu_j, int* Omega_Ind,
 		double *Omega_Logit, int *Gamma,
-		double *Sig2, double *P, double *A, double *B, double m, double c_var,
+		double *Sig2, double m, double c_var,
 		double tau_0, int *pnum, int *pstart,
-		int *n_position, int *n_peptide, int ind_pep, RngStream rng, int i);
+		int *n_position, int *n_peptide, int ind_pep, RngStream rng);
 
 int update_position_p1(double **Exprs, int* Omega_Ind, double *Omega_Logit,
 		double **Alpha, int **Gamma,
@@ -87,8 +87,8 @@ void update_lambdas(double *lambda_a, double *lambda_b, double r_a,
 		double r_b, double *A, double *B, int n_position,
 		RngStream rng);
 
-void update_MRF(double *P, double *Theta, double **Omega,
-		double *kappa, int *pnum, int *pstart, int *n_position, int *n_indiv,
+void update_MRF(double *P, double *Theta, double *Omega,
+		double *kappa, int *pnum, int *pstart, int *n_position,
 		int *accept, RngStream rng);
 
 void update_prob_include(int *n_peptide, int *n_indiv, int **Gamma, int **ProbSum, double *mean_fitted,
@@ -134,6 +134,7 @@ void PMA_mcmc_MS(double *Y, double *hyper_parms, int *pstart,
 {
 	R_CStackLimit=(uintptr_t)-1;
 	int p, i, n = 0, j, k;
+	*nmax = (*nmax < NMAX) ? *nmax : NMAX;
 
 	double **Exprs;
 	double **Alpha;
@@ -186,8 +187,8 @@ void PMA_mcmc_MS(double *Y, double *hyper_parms, int *pstart,
 	xB0[1] = 2.0;
 	xA0[1] = 2.0;
 
-	Omega_Ind = (int*) malloc(*n_indiv*sizeof(int));
-	Omega_Logit = (double*) malloc(*n_indiv*sizeof(double));
+	Omega_Ind = (int*) malloc(*n_peptide*sizeof(int));
+	Omega_Logit = (double*) malloc(*n_peptide*sizeof(double));
 
 	Gamma = (int**) malloc(*n_indiv*sizeof(int*));
 	ProbSum = (int**) malloc(*n_indiv*sizeof(int*));
@@ -222,7 +223,7 @@ void PMA_mcmc_MS(double *Y, double *hyper_parms, int *pstart,
 
 	A = (double*) malloc(*n_position*sizeof(double));
 	B = (double*) malloc(*n_position*sizeof(double));
-	P = (double*) malloc(*n_peptide*sizeof(double));
+	P = (double*) malloc(*n_position*sizeof(double));
 	Mu = (double*) malloc(*n_indiv*sizeof(double));
 
 	// check whether our data is censored at all,
@@ -291,6 +292,7 @@ void PMA_mcmc_MS(double *Y, double *hyper_parms, int *pstart,
 			n_position, pstart, pnum, n_peptide, n_indiv,
 			*nmax, xA, xB,
 			*MRF, *ind_pep);
+	PutRNGstate();
 
 	Rprintf("parameters initialized \n");
 	for(i = 0; i <= (*n_iter)*(*n_sweep) + *n_burn; i++)
@@ -341,8 +343,8 @@ void PMA_mcmc_MS(double *Y, double *hyper_parms, int *pstart,
 
 		if(*update_u == 1)
 		{
-			update_u_pars(P, *a_0, *b_0, xA0, xB0, *n_position,
-					psi_a, psi_b, rng, nmax, *eps);
+			update_u_pars(P, &a_0, &b_0, xA0, xB0, *n_position,
+					psi_a, psi_b, rng[0], *nmax, *eps);
 		}
 
 		// check whether we need to update complete data
@@ -361,7 +363,7 @@ void PMA_mcmc_MS(double *Y, double *hyper_parms, int *pstart,
 			{
 				store_mcmc_output1(Mu, A, B, P, Sig2, D, Theta, kappa, alpha, beta,
 						m, c_var, n_peptide, n_indiv, n_position, cen_num,
-						lambda_a, lambda_b, *MRF, *ind_pep,
+						lambda_a, lambda_b, a_0, b_0, *MRF, *ind_pep,
 						AFILE, BFILE, PFILE, VARFILE, Sig2FILE, MUFILE, DFILE,
 						THETAFILE);
 			}
@@ -396,8 +398,25 @@ void PMA_mcmc_MS(double *Y, double *hyper_parms, int *pstart,
 	}
 
 	finalize_prob_include(n_iter, n_peptide, n_indiv, OutProbs, ProbSum);
+	Rprintf("closing files\n");
+	if(*write == 1)
+	{
+		fclose(AFILE);
+		fclose(BFILE);
+		fclose(PFILE);
+		fclose(VARFILE);
+		fclose(Sig2FILE);
+		fclose(MUFILE);
+		if(*cen_num > 0)
+		{
+			fclose(DFILE);
+		}
+		if(*MRF == 1)
+		{
+			fclose(THETAFILE);
+		}
+	}
 
-	PutRNGstate();
 	free(A);
 	free(B);
 	free(P);
@@ -406,10 +425,18 @@ void PMA_mcmc_MS(double *Y, double *hyper_parms, int *pstart,
 	free(xAlpha);
 	free(xA0);
 	free(xB0);
+	free(Omega_Ind);
+	free(Omega_Logit);
+
+	for(i = 0; i < *nP; i++)
+	{
+		RngStream_DeleteStream(rng[i]);
+		//RngStream_IncreasedPrecis(rngs[i], 1);
+	}
+
 
 	if(*MRF == 1)
 	{
-		fclose(THETAFILE);
 		free(Theta);
 	}
 
@@ -434,24 +461,11 @@ void PMA_mcmc_MS(double *Y, double *hyper_parms, int *pstart,
 
 	free(xA);
 	free(xB);
-	free(Omega_Ind);
-	free(Omega_Logit);
 	free(Exprs);
 	free(Alpha);
 	free(ProbSum);
 	free(Gamma);
 
-
-	fclose(AFILE);
-	fclose(BFILE);
-	fclose(PFILE);
-	fclose(VARFILE);
-	fclose(Sig2FILE);
-	fclose(MUFILE);
-	if(*cen_num > 0)
-	{
-		fclose(DFILE);
-	}
 
 	return;
 }
@@ -472,7 +486,7 @@ void finalize_prob_include(int *n_iter, int *n_peptide, int *n_indiv, double *Ou
 void store_mcmc_output1(double *Mu, double *A, double *B, double *P, double *Sig2, double *D,
 		double *Theta, double kappa, double alpha, double beta,
 		double m, double c_var, int *n_peptide, int *n_indiv, int *n_position, int *cen_num,
-		double lambda_a, double lambda_b, int MRF, int ind_pep,
+		double lambda_a, double lambda_b, double a_0, double b_0, int MRF, int ind_pep,
 		FILE *AFILE, FILE *BFILE, FILE *PFILE, FILE *VARFILE, FILE *Sig2FILE, FILE *MUFILE,
 		FILE *DFILE, FILE *THETAFILE)
 {
@@ -524,8 +538,8 @@ void store_mcmc_output1(double *Mu, double *A, double *B, double *P, double *Sig
 	fprintf(PFILE, "\n");
 	fprintf(Sig2FILE, "\n");
 	fprintf(MUFILE, "\n");
-	fprintf(VARFILE, "%.5lf \t %.5lf \t %.5lf \t %.5lf \t %.5lf \t %.5lf \t %.5lf \n", m, c_var,
-			lambda_a, lambda_b, kappa, alpha, beta);
+	fprintf(VARFILE, "%.5lf \t %.5lf \t %.5lf \t %.5lf \t %.5lf \t %.5lf \t %.5lf \t %.5lf \t %.5lf \n", m, c_var,
+			lambda_a, lambda_b, kappa, alpha, beta, a_0, b_0);
 	return;
 }
 
@@ -638,13 +652,21 @@ void InitializeChain1(int *Omega_Ind, double *Omega_Logit,
 			else
 			{
 				Omega_Ind[pep] = 1;
-				Omega_Logit[pep] = log(rgamma(A[p], 1.0),rgamma(B[p], 1.0));
+				Omega_Logit[pep] = log(rgamma(A[p], 1.0)/rgamma(B[p], 1.0));
 			}
 
 			for(i = 0; i < *n_indiv; i++)
 			{
 				u = runif(0.0, 1.0);
-				Gamma[i][pep] = (int)(u <= expit(Omega_Logit[pep]));
+				if(Omega_Ind[pep] == 1)
+				{
+					Gamma[i][pep] = (int)(u <= expit(Omega_Logit[pep]));
+				}
+
+				else
+				{
+					Gamma[i][pep] = 0;
+				}
 
 				if(Gamma[i][pep] == 0)
 				{
@@ -892,9 +914,9 @@ void update_lambdas(double *lambda_a, double *lambda_b, double r_a,
 
 void update_indiv_j1(double *Exprs, double *Alpha, double *mu_j, int* Omega_Ind,
 		double *Omega_Logit, int *Gamma,
-		double *Sig2, double *P, double *A, double *B, double m, double c_var,
+		double *Sig2, double m, double c_var,
 		double tau_0, int *pnum, int *pstart,
-		int *n_position, int *n_peptide, int ind_pep, RngStream rng, int i)
+		int *n_position, int *n_peptide, int ind_pep, RngStream rng)
 {
 	// update Mu_j
 	double S_dot = 0.0, V_dot = 1.0/tau_0;
