@@ -41,14 +41,35 @@ typedef struct ARS_WORKSPACE ARS_workspace;
 #include <gsl/gsl_math.h>
 #include <gsl/gsl_sf.h>
 
-double sample_conditional(double* x, int* num_x, int nmax, double* argvec, ARS_workspace *space,
-		RngStream rng, double eps, double (*h)(double x, double *args), double (*h_prime)(double x, double *args));
+double sample_conditional(double* restrict x,
+		int* restrict num_x,
+		int nmax,
+		double* restrict argvec,
+		ARS_workspace *ws,
+		RngStream rng,
+		double eps, double (*h)(double, double *),
+		double (*h_prime)(double , double *));
 
-int update_hull(double *x, ARS_workspace *space, double *argvec, int *num_x, int nmax,
-		double xnew, double hnew, int l_section, double *huzmax,
-		double (*h)(double, double *), double (*h_prime)(double, double *));
+int update_hull(double* restrict x,
+		ARS_workspace *ws,
+		double* restrict argvec,
+		int* restrict num_x,
+		int nmax,
+		double xnew,
+		double hnew,
+		int l_section,
+		double* restrict huzmax,
+		double (*h)(double, double *), double (*h_prime)(double , double *));
 
-double sample_hull(double *x, ARS_workspace *space, int* num_x, int *section, double p, double *huzmax);
+double sample_hull(double* restrict x,
+		ARS_workspace *ws,
+		int* restrict num_x,
+		int* restrict section,
+		double p,
+		double huzmax);
 
-void initialize_hull(double *x, ARS_workspace *space, int* num_x, double* huzmax);
+void initialize_hull(double* restrict x,
+		ARS_workspace *ws,
+		int num_x,
+		double huzmax);
 
