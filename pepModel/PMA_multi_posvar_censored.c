@@ -7,6 +7,7 @@
 
 #include <omp.h>
 #include <math.h>
+#include <float.h>
 #include <stdio.h>
 #include <R.h>
 #include <Rmath.h>
@@ -23,7 +24,7 @@
 #include <Rinterface.h>
 #endif
 
-#define ZZERO 2.0e-308
+#define ZZERO DBL_MIN
 
 //
 double lc_AB(double x, double *argvec);
@@ -34,23 +35,36 @@ double lc_alpha(double x, double *argvec);
 
 double lcp_alpha(double x, double *argvec);
 
+inline double log1m_from_logit(double x);
+
+inline double log_from_logit(double x);
+
+inline double expit(double x);
+
+void update_u_pars(double *P, double *a_0, double *b_0,
+		double *xA0, double *xB0, int n_position, double psi_a,
+		double psi_b, RngStream rng, int nmax, double eps);
+
 void update_var_pars(double *Sig2, double *alpha, double *beta,
 		double alpha_0, double beta_0,  double *xAlpha,
 		int n_max, int ind_pep, int n_peptide,
 		int n_position, RngStream rng, double eps);
 
-void update_indiv_j1(double *Exprs, double *Alpha, double *mu_j, double *Omega, int *Gamma,
-		double *Sig2, double m, double c_var, double tau_0, int *pnum, int *pstart,
-		int *n_position, int *n_peptide, int ind_pep, RngStream rng);
+void update_indiv_j1(double *Exprs, double *Alpha, double *mu_j, int* Omega_Ind,
+		double *Omega_Logit, int *Gamma,
+		double *Sig2, double *P, double *A, double *B, double m, double c_var,
+		double tau_0, int *pnum, int *pstart,
+		int *n_position, int *n_peptide, int ind_pep, RngStream rng, int i);
 
-int update_position_p1(double **Exprs, double *Omega, double **Alpha, int **Gamma,
+int update_position_p1(double **Exprs, int* Omega_Ind, double *Omega_Logit,
+		double **Alpha, int **Gamma,
 		double *Sig2, double *Mu, double *A, double *B, double *P,
 		double a_0, double b_0, double lambda_a, double lambda_b,
 		int p, int *n_indiv, int *pnum, int *pstart, RngStream rng, int nmax,
 		double *xA, double *xB, ARS_workspace *workspace, double eps,
 		int ind_pep, int MRF, double alpha, double beta);
 
-void InitializeChain1(double *Omega, double **Alpha, int **Gamma,
+void InitializeChain1(int *Omega_Ind, double *Omega_Logit, double **Alpha, int **Gamma,
 		double *Sig2, double *Mu, double *A, double *B, double *P, double *Theta,
 		double *c_var, double *m, double *alpha, double *beta,
 		int *n_position, int *pstart, int *pnum, int *n_peptide, int *n_indiv,
@@ -65,7 +79,7 @@ void update_global_parms(double **Alpha, int **Gamma, double *m, double *c_var,
 		int *accept_c, RngStream rng, double adptm, double adptv, int ind_pep,
 		int var_prior, double *xAlpha, int n_max, double eps);
 
-double expit(double x);
+inline double expit(double x);
 
 void tnorm_test(double* x, int *n, double *m, double *sigmasqr);
 
@@ -73,8 +87,9 @@ void update_lambdas(double *lambda_a, double *lambda_b, double r_a,
 		double r_b, double *A, double *B, int n_position,
 		RngStream rng);
 
-void update_MRF(double *P, double *Theta, double *Omega,
-		double *kappa, int *pnum, int *pstart, int *n_position, int *accept, RngStream rng);
+void update_MRF(double *P, double *Theta, double **Omega,
+		double *kappa, int *pnum, int *pstart, int *n_position, int *n_indiv,
+		int *accept, RngStream rng);
 
 void update_prob_include(int *n_peptide, int *n_indiv, int **Gamma, int **ProbSum, double *mean_fitted,
 		double **Alpha, double *Mu, double n);
@@ -89,7 +104,7 @@ void update_data(double *D, int cen_num, int* cen_ind, int* cen_pep, double *Y, 
 void store_mcmc_output1(double *Mu, double *A, double *B, double *P, double *Sig2, double *D,
 		double *Theta, double kappa, double alpha, double beta,
 		double m, double c_var, int *n_peptide, int *n_indiv, int *n_position, int *cen_num,
-		double lambda_a, double lambda_b, int MRF, int ind_pep,
+		double lambda_a, double lambda_b, double a_0, double b_0, int MRF, int ind_pep,
 		FILE *AFILE, FILE *BFILE, FILE *PFILE, FILE *VARFILE, FILE *Sig2FILE, FILE *MUFILE,
 		FILE *DFILE, FILE *THETAFILE);
 
@@ -113,32 +128,33 @@ void PMA_mcmc_MS(double *Y, double *hyper_parms, int *pstart,
 		int *pnum, int *n_position, int *n_peptide, int *n_indiv, int *nP,
 		int *cen_ind, int *cen_pep, int *cen_num, int *cen_pos,
 		int *n_iter, int *n_sweep, int *n_burn,
-		int *MRF, int *lambda_prior, int *ind_pep, int *var_prior,
+		int *MRF, int *lambda_prior, int *ind_pep, int *var_prior, int *update_u,
 		double *OutProbs, double *mean_fitted, int *write, double *eps, int *nmax,
 		int *accept, int *silent)
 {
 	R_CStackLimit=(uintptr_t)-1;
-	int p, i, n = 0, j;
+	int p, i, n = 0, j, k;
 
 	double **Exprs;
 	double **Alpha;
 	double **xA, **xB;
-	double *Omega, *Theta;
+	double *Omega_Logit, *Theta;
+	int *Omega_Ind;
 	int **ProbSum;
 	int **Gamma;
 	double *Mu;
 	double *A, *B, *P, *Sig2, *D;
-	double *xAlpha;
+	double *xAlpha, *xA0, *xB0;
 
 	int accept_m = 0, accept_c = 0;
 
 	double a_0, b_0, lambda_a, lambda_b, tau, alpha_0, beta_0, m_0, v_0;
-	double r_a, r_b, kappa;
-
-
+	double r_a, r_b, kappa, psi_a, psi_b;
 
 	a_0 = hyper_parms[0];
 	b_0 = hyper_parms[1];
+	psi_a = hyper_parms[0];
+	psi_b = hyper_parms[1];
 
 	r_a = hyper_parms[2];
 	r_b = hyper_parms[3];
@@ -162,7 +178,17 @@ void PMA_mcmc_MS(double *Y, double *hyper_parms, int *pstart,
 	xAlpha = (double*) malloc(*nmax*sizeof(double));
 	xAlpha[0] = 1.0;
 	xAlpha[1] = 2.0;
-	Omega = (double*) malloc(*n_peptide*sizeof(double));
+
+	xA0 = (double*) malloc(*nmax*sizeof(double));
+	xB0 = (double*) malloc(*nmax*sizeof(double));
+	xA0[0] = .1;
+	xB0[0] = .1;
+	xB0[1] = 2.0;
+	xA0[1] = 2.0;
+
+	Omega_Ind = (int*) malloc(*n_indiv*sizeof(int));
+	Omega_Logit = (double*) malloc(*n_indiv*sizeof(double));
+
 	Gamma = (int**) malloc(*n_indiv*sizeof(int*));
 	ProbSum = (int**) malloc(*n_indiv*sizeof(int*));
 
@@ -196,7 +222,7 @@ void PMA_mcmc_MS(double *Y, double *hyper_parms, int *pstart,
 
 	A = (double*) malloc(*n_position*sizeof(double));
 	B = (double*) malloc(*n_position*sizeof(double));
-	P = (double*) malloc(*n_position*sizeof(double));
+	P = (double*) malloc(*n_peptide*sizeof(double));
 	Mu = (double*) malloc(*n_indiv*sizeof(double));
 
 	// check whether our data is censored at all,
@@ -239,7 +265,7 @@ void PMA_mcmc_MS(double *Y, double *hyper_parms, int *pstart,
 
 	//statically allocated struct for Adaptive Rejection Sampling
 	ARS_workspace workspace;
-	*nmax = (*nmax < 10) ? *nmax : 10;
+	*nmax = (*nmax < NMAX) ? *nmax : NMAX;
 
 	// initialize the probsum values
 	for(i = 0; i < *n_indiv; i++)
@@ -259,7 +285,8 @@ void PMA_mcmc_MS(double *Y, double *hyper_parms, int *pstart,
 		//RngStream_IncreasedPrecis(rngs[i], 1);
 	}
 	GetRNGstate();
-	InitializeChain1(Omega, Alpha, Gamma, Sig2, Mu, A, B, P, Theta,
+	InitializeChain1(Omega_Ind, Omega_Logit, Alpha,
+			Gamma, Sig2, Mu, A, B, P, Theta,
 			&c_var, &m, &alpha, &beta,
 			n_position, pstart, pnum, n_peptide, n_indiv,
 			*nmax, xA, xB,
@@ -294,7 +321,7 @@ void PMA_mcmc_MS(double *Y, double *hyper_parms, int *pstart,
 #pragma omp for nowait
 			for(p = 0; p < *n_position; p++)
 			{
-				update_position_p1(Exprs, Omega, Alpha, Gamma,
+				update_position_p1(Exprs, Omega_Ind, Omega_Logit, Alpha, Gamma,
 						Sig2, Mu, A, B, P,
 						a_0, b_0, lambda_a, lambda_b,
 						p, n_indiv, pnum, pstart, rng[th_id], *nmax,
@@ -305,10 +332,17 @@ void PMA_mcmc_MS(double *Y, double *hyper_parms, int *pstart,
 #pragma omp for nowait
 			for(j = 0; j < *n_indiv; j++)
 			{
-				update_indiv_j1(Exprs[j], Alpha[j], &Mu[j], Omega, Gamma[j],
+				update_indiv_j1(Exprs[j], Alpha[j], &Mu[j], Omega_Ind,
+						Omega_Logit, Gamma[j],
 						Sig2, m, c_var, tau, pnum, pstart,
 						n_position, n_peptide, *ind_pep, rng[th_id]);
 			}
+		}
+
+		if(*update_u == 1)
+		{
+			update_u_pars(P, *a_0, *b_0, xA0, xB0, *n_position,
+					psi_a, psi_b, rng, nmax, *eps);
 		}
 
 		// check whether we need to update complete data
@@ -316,12 +350,6 @@ void PMA_mcmc_MS(double *Y, double *hyper_parms, int *pstart,
 		{
 			update_data(D, *cen_num, cen_ind, cen_pep, Y, Exprs,
 					Alpha, Mu, *n_peptide, Sig2, cen_pos);
-		}
-		// update MRF if applicable
-		if(*MRF == 1)
-		{
-			update_MRF(P, Theta, Omega,
-					&kappa, pnum, pstart, n_position, accept, rng[0]);
 		}
 
 		if((i > *n_burn) && ((i - *n_burn) % (*n_sweep) == 0 ))
@@ -376,6 +404,8 @@ void PMA_mcmc_MS(double *Y, double *hyper_parms, int *pstart,
 	free(Sig2);
 	free(Mu);
 	free(xAlpha);
+	free(xA0);
+	free(xB0);
 
 	if(*MRF == 1)
 	{
@@ -404,7 +434,8 @@ void PMA_mcmc_MS(double *Y, double *hyper_parms, int *pstart,
 
 	free(xA);
 	free(xB);
-	free(Omega);
+	free(Omega_Ind);
+	free(Omega_Logit);
 	free(Exprs);
 	free(Alpha);
 	free(ProbSum);
@@ -535,14 +566,16 @@ void update_prob_include(int *n_peptide, int *n_indiv, int **Gamma, int **ProbSu
 }
 
 
-void InitializeChain1(double *Omega, double **Alpha, int **Gamma,
+void InitializeChain1(int *Omega_Ind, double *Omega_Logit,
+		double **Alpha, int **Gamma,
 		double *Sig2, double *Mu, double *A, double *B, double *P, double *Theta,
 		double *c_var, double *m, double *alpha, double *beta,
 		int *n_position, int *pstart, int *pnum, int *n_peptide, int *n_indiv,
 		int nmax, double **xA, double **xB,
 		int MRF, int ind_pep)
 {
-	int c, p, i, g;
+	int c, p, i, g, pep;
+	double u;
 	for(p = 0; p < *n_position; p++)
 	{
 		A[p] = 1.0;
@@ -551,7 +584,7 @@ void InitializeChain1(double *Omega, double **Alpha, int **Gamma,
 		{
 			Theta[p] = 0;
 		}
-		P[p] = 0.5;
+		P[p] = 0.0;
 
 		if(ind_pep == 0)
 		{
@@ -584,38 +617,47 @@ void InitializeChain1(double *Omega, double **Alpha, int **Gamma,
 	for(i = 0; i < *n_indiv; i++)
 	{
 		Mu[i] = 0.0;
-		for(p = 0; p < *n_position; p++)
+	}
+
+	for(p = 0; p < *n_position; p++)
+	{
+		for(c = 0; c < pnum[p]; c++)
 		{
-			for(c = 0; c < pnum[p]; c++)
+			pep = pstart[p] + c;
+			if(ind_pep == 1)
 			{
-				if(ind_pep == 1)
-				{
-					Sig2[pstart[p] + c] = 1.0;
-				}
+				Sig2[pep] = 1.0;
+			}
 
-				if(runif(0.0,1.0) <= P[p])
+			if(runif(0.0,1.0) <= expit(P[p]))
+			{
+				Omega_Ind[pep] = 0;
+				Omega_Logit[pep] = 0.0;
+			}
+
+			else
+			{
+				Omega_Ind[pep] = 1;
+				Omega_Logit[pep] = log(rgamma(A[p], 1.0),rgamma(B[p], 1.0));
+			}
+
+			for(i = 0; i < *n_indiv; i++)
+			{
+				u = runif(0.0, 1.0);
+				Gamma[i][pep] = (int)(u <= expit(Omega_Logit[pep]));
+
+				if(Gamma[i][pep] == 0)
 				{
-					Omega[pstart[p] + c] = 0.0;
+					Alpha[i][pep] = 0.0;
 				}
 				else
 				{
-					Omega[pstart[p] + c] = rbeta(A[p], B[p]);
-				}
-
-				Gamma[i][pstart[p] + c] =
-						(int)(runif(0.0, 1.0) <= Omega[pstart[p] + c]);
-
-				if(Gamma[i][pstart[p] + c] == 0)
-				{
-					Alpha[i][pstart[p] + c] = 0.0;
-				}
-				else
-				{
-					Alpha[i][pstart[p] + c] = truncNorm(*m, *c_var);
+					Alpha[i][pep] = truncNorm(*m, *c_var);
 				}
 			}
 		}
 	}
+
 	return;
 }
 
@@ -677,7 +719,6 @@ void update_MRF(double *P, double *Theta, double *Omega,
 
 	return;
 }
-
 void update_global_parms(double **Alpha, int **Gamma, double *m, double *c_var,
 		double *A, double *B, double *Sig2, double m_0, double v_0, double alpha_0,
 		double beta_0, double *alpha, double *beta, int lambda_prior,
@@ -766,10 +807,9 @@ void update_global_parms(double **Alpha, int **Gamma, double *m, double *c_var,
 				n_position, rng);
 	}
 
-	// if
-
 	return;
 }
+
 
 void update_var_pars(double *Sig2, double *alpha, double *beta,
 		double alpha_0, double beta_0,  double *xAlpha,
@@ -820,28 +860,45 @@ void update_lambdas(double *lambda_a, double *lambda_b, double r_a,
 		double r_b, double *A, double *B, int n_position,
 		RngStream rng)
 {
+
 	int p;
-	double S_a = 0, S_b = 0;
+	double S_a = 0.0, S_b = 0.0;
+	double r, s, rate, shape;
 
 	for(p = 0; p < n_position; p++)
 	{
 		S_a += A[p];
 		S_b += B[p];
 	}
-
+/*
 	*lambda_a = RngStream_GA1((double)(n_position) + 1.0, rng)/(S_a + r_a);
 	*lambda_b = RngStream_GA1((double)(n_position) + 1.0, rng)/(S_b + r_b);
+*/
+	s = *lambda_b;
+
+	rate = S_a*s + s*r_a;
+	shape = (double)(n_position + 1);
+	r = RngStream_GA1(shape, rng)/rate;
+
+	rate = S_b + S_a*r + r_a*r + r_b;
+	shape = 2.0*(double)(n_position + 1);
+	s = RngStream_GA1(shape, rng)/rate;
+
+	*lambda_b = s;
+	*lambda_a = r*s;
 
 	return;
 }
 
-void update_indiv_j1(double *Exprs, double *Alpha, double *mu_j, double *Omega, int *Gamma,
-		double *Sig2, double m, double c_var, double tau_0, int *pnum, int *pstart,
-		int *n_position, int *n_peptide, int ind_pep,  RngStream rng)
+void update_indiv_j1(double *Exprs, double *Alpha, double *mu_j, int* Omega_Ind,
+		double *Omega_Logit, int *Gamma,
+		double *Sig2, double *P, double *A, double *B, double m, double c_var,
+		double tau_0, int *pnum, int *pstart,
+		int *n_position, int *n_peptide, int ind_pep, RngStream rng, int i)
 {
 	// update Mu_j
 	double S_dot = 0.0, V_dot = 1.0/tau_0;
-	int p, c;
+	int p, c, pep;
 
 	// peptide variances common across position
 	if(ind_pep == 0)
@@ -850,7 +907,8 @@ void update_indiv_j1(double *Exprs, double *Alpha, double *mu_j, double *Omega, 
 		{
 			for(c = 0; c < pnum[p]; c++)
 			{
-				S_dot += (Exprs[pstart[p] + c] - Alpha[pstart[p] + c])/Sig2[p];
+				pep = pstart[p] + c;
+				S_dot += (Exprs[pep] - Alpha[pep])/Sig2[p];
 			}
 			V_dot += pnum[p]/Sig2[p];
 		}
@@ -870,7 +928,7 @@ void update_indiv_j1(double *Exprs, double *Alpha, double *mu_j, double *Omega, 
 	// update Alpha_icp and Gamma_icp, the individual fitted effects.
 	int cur;
 	double m_prime, v_prime, R;
-	double var;
+	double var, omega, u;
 	for(p = 0; p < *n_position; p++)
 	{
 		if(ind_pep == 0)
@@ -880,14 +938,15 @@ void update_indiv_j1(double *Exprs, double *Alpha, double *mu_j, double *Omega, 
 
 		for(c = 0; c < pnum[p]; c++)
 		{
-			if(Omega[pstart[p] + c] > 0.0)
+			pep = pstart[p] + c;
+			if(Omega_Ind[pep] == 1)
 			{
 				if(ind_pep == 1)
 				{
-					var = Sig2[pstart[p] + c];
+					var = Sig2[pep];
 				}
 				v_prime = (c_var*var)/(var + c_var);
-				m_prime = ((Exprs[pstart[p] + c] - *mu_j)*c_var + m*(var))/(c_var + var);
+				m_prime = ((Exprs[pep] - *mu_j)*c_var + m*(var))/(c_var + var);
 				R = .5*log(v_prime/c_var);
 				R = R + pnorm(0.0, m_prime, sqrt(v_prime), 0, 1);
 				R = R - pnorm(0.0, m, sqrt(c_var), 0, 1);
@@ -895,17 +954,20 @@ void update_indiv_j1(double *Exprs, double *Alpha, double *mu_j, double *Omega, 
 				R = exp(gsl_pow_2(m_prime)/(2.0*v_prime)
 						- gsl_pow_2(m)/(2.0*(c_var)) + R);
 
-				cur = (int)(RngStream_RandU01(rng) <= ((R*Omega[pstart[p] + c])/(1.0 - Omega[pstart[p] + c] + Omega[pstart[p] + c]*R)));
+				omega = expit(Omega_Logit[pep]);
+				u = RngStream_RandU01(rng);
+
+				cur = (u <= ((R*omega)/(1.0 - omega + omega*R))) ? 1 : 0;
 
 				if(cur == 1)
 				{
-					Gamma[pstart[p] + c] = 1;
-					Alpha[pstart[p] + c] = truncNorm_parallel(m_prime, v_prime, rng);
+					Gamma[pep] = 1;
+					Alpha[pep] = truncNorm_parallel(m_prime, v_prime, rng);
 				}
 				else if(cur == 0)
 				{
-					Gamma[pstart[p] + c] = 0;
-					Alpha[pstart[p] + c] = 0.0;
+					Gamma[pep] = 0;
+					Alpha[pep] = 0.0;
 				}
 				else
 				{
@@ -914,15 +976,16 @@ void update_indiv_j1(double *Exprs, double *Alpha, double *mu_j, double *Omega, 
 			}
 			else
 			{
-				Gamma[pstart[p] + c] = 0;
-				Alpha[pstart[p] + c] = 0.0;
+				Gamma[pep] = 0;
+				Alpha[pep] = 0.0;
 			}
 		}
 	}
 	return;
 }
 
-int update_position_p1(double **Exprs, double *Omega, double **Alpha, int **Gamma,
+int update_position_p1(double **Exprs, int* Omega_Ind, double *Omega_Logit,
+		double **Alpha, int **Gamma,
 		double *Sig2, double *Mu, double *A, double *B, double *P,
 		double a_0, double b_0, double lambda_a, double lambda_b,
 		int p, int *n_indiv, int *pnum, int *pstart, RngStream rng, int nmax,
@@ -938,19 +1001,13 @@ int update_position_p1(double **Exprs, double *Omega, double **Alpha, int **Gamm
 	double N_cp = 0.0;
 	double argvec[3];
 
-
 	// update A's and B's
 	for(c = 0; c < pnum[p]; c++)
 	{
-		if(Omega[p_begin + c] > 1.0 - ZZERO)
+		if(Omega_Ind[c] == 1)
 		{
-			Omega[p_begin + c] = Omega[p_begin + c] - .0000001;
-			//Rprintf("Omega essentially 1. Slightly reducing for numerical considerations\n");
-		}
-		if((Omega[p_begin + c] > ZZERO) & ((1.0 - Omega[p_begin + c]) > ZZERO))
-		{
-			s_log_w += log(Omega[p_begin + c]);
-			s_log_1minus_w += log1p(-1.0*Omega[p_begin + c]);
+			s_log_w += log_from_logit(Omega_Logit[p_begin + c]);
+			s_log_1minus_w += log1m_from_logit(Omega_Logit[p_begin + c]);
 			S_p += 1;
 		}
 	}
@@ -960,13 +1017,14 @@ int update_position_p1(double **Exprs, double *Omega, double **Alpha, int **Gamm
 		A[p] = RngStream_GA1(1.0, rng)/(lambda_a);
 		B[p] = RngStream_GA1(1.0, rng)/(lambda_b);
 	}
+
 	else
 	{
 		R = (lambda_a - s_log_w);
 		argvec[2] = R;
 		argvec[0] = (double)S_p;
 		argvec[1] = B[p];
-		//Rprintf("%lf", R);
+
 		A[p] = sample_conditional(xA, &num_x, nmax, argvec,
 				workspace, rng, eps, lc_AB, lcp_AB);
 
@@ -979,7 +1037,7 @@ int update_position_p1(double **Exprs, double *Omega, double **Alpha, int **Gamm
 		R = (lambda_b - s_log_1minus_w);
 		argvec[2] = R;
 		argvec[1] = A[p];
-		//Rprintf("%lf\n", R);
+
 		B[p] = sample_conditional(xB, &num_x, nmax, argvec,
 				workspace, rng, eps, lc_AB, lcp_AB);
 		if(B[p] == -1.0)
@@ -990,28 +1048,33 @@ int update_position_p1(double **Exprs, double *Omega, double **Alpha, int **Gamm
 	//update Ps
 	if(MRF == 0)
 	{
-		P[p] = RngStream_Beta(a_0 + (double)(pnum[p] - S_p), b_0 + (double)(S_p), rng);
+		P[p] = RngStream_LogitBeta(a_0 + (double)(pnum[p] - S_p), b_0 + (double)(S_p), rng);
 	}
 
 	frac = lbeta(A[p], (double)(*n_indiv) + B[p])- lbeta(A[p], B[p]);
 	frac = exp(frac);
 
+	int pep;
+	double u;
+	u = expit(P[p]);
 	// update Omegas
 	for(c = 0; c < pnum[p]; c++)
 	{
+		pep = p_begin + c;
 		for(i = 0; i < *n_indiv; i++)
 		{
-			N_cp += (double)Gamma[i][p_begin + c];
+			N_cp += (double)Gamma[i][pep];
 		}
 
-		R = (double)(N_cp == 0.0)*P[p]/(P[p] + (1.0 - P[p])*frac);
+		R = (double)(N_cp == 0.0)*u/(u + (1.0 - u)*frac);
 		if(RngStream_RandU01(rng) <= R)
 		{
-			Omega[p_begin + c] = 0.0;
+			Omega_Ind[pep] = 0;
 		}
 		else
 		{
-			Omega[p_begin + c] = RngStream_Beta(A[p] + N_cp,
+			Omega_Ind[pep] = 1;
+			Omega_Logit[pep] = RngStream_LogitBeta(A[p] + N_cp,
 					B[p] + (double)(*n_indiv) - N_cp, rng);
 		}
 		N_cp = 0.0;
@@ -1025,7 +1088,8 @@ int update_position_p1(double **Exprs, double *Omega, double **Alpha, int **Gamm
 		{
 			for(c = 0; c < pnum[p]; c++)
 			{
-				SS_i += gsl_pow_2(Exprs[i][p_begin + c] - Mu[i] - Alpha[i][p_begin + c]);
+				pep = p_begin + c;
+				SS_i += gsl_pow_2(Exprs[i][pep] - Mu[i] - Alpha[i][pep]);
 			}
 		}
 		SS_i = SS_i/2.0;
@@ -1037,18 +1101,54 @@ int update_position_p1(double **Exprs, double *Omega, double **Alpha, int **Gamm
 	{
 		for(c = 0; c < pnum[p]; c++)
 		{
+			pep = p_begin + c;
 			for(i = 0; i < *n_indiv; i++)
 			{
-				SS_i += gsl_pow_2(Exprs[i][p_begin + c] - Mu[i] - Alpha[i][p_begin + c]);
+				SS_i += gsl_pow_2(Exprs[i][pep] - Mu[i] - Alpha[i][pep]);
 			}
 			SS_i = SS_i/2.0;
 			SS_i += beta;
-			Sig2[p_begin + c] = SS_i/RngStream_GA1(((double)(*n_indiv))/2.0 + alpha, rng);
+			Sig2[pep] = SS_i/RngStream_GA1(((double)(*n_indiv))/2.0 + alpha, rng);
 			SS_i = 0.0;
 		}
 
 	}
 	return(1);
+}
+
+void update_u_pars(double *P, double *a_0, double *b_0,
+		double *xA0, double *xB0, int n_position, double psi_a,
+		double psi_b, RngStream rng, int nmax, double eps)
+{
+	int p;
+	int num_x = 2;
+
+	double s_log_u = psi_a;
+	double s_log_1mu = psi_b;
+	double argvec[3];
+
+	ARS_workspace workspace;
+	argvec[0] = (double)(n_position);
+	argvec[1] = *b_0;
+
+	for(p = 0; p < n_position; p++)
+	{
+		s_log_u -= log_from_logit(P[p]);
+		s_log_1mu -= log1m_from_logit(P[p]);
+	}
+
+	argvec[2] = s_log_u;
+
+	*a_0 = sample_conditional(xA0, &num_x, nmax, argvec,
+			&workspace, rng, eps, lc_AB, lcp_AB);
+
+	num_x = 2;
+
+	argvec[1] = *a_0;
+	argvec[2] = s_log_1mu;
+	*b_0 = sample_conditional(xB0, &num_x, nmax, argvec,
+			&workspace, rng, eps, lc_AB, lcp_AB);
+	return;
 }
 
 
@@ -1057,7 +1157,6 @@ double truncNorm_parallel(double mean, double sigmasqr, RngStream rng)
 	double sigma;
 	double left;
 	double x;
-
 
 	sigma = sqrt(sigmasqr);
 	left = -1.0*mean/sigma;
@@ -1099,7 +1198,6 @@ double truncNorm(double mean, double sigmasqr)
 	double left;
 	double x;
 
-
 	sigma = sqrt(sigmasqr);
 	left = -1.0*mean/sigma;
 
@@ -1134,11 +1232,35 @@ double truncNorm(double mean, double sigmasqr)
 	return(x);
 }
 
-double expit(double x)
+inline double expit(double x)
 {
 	double p;
 	p = 1.0/(1.0 + exp(-x));
 	return(p);
+}
+
+inline double log_from_logit(double x)
+{
+	if(x > 0.0)
+	{
+		return(-log1p(exp(-x)));
+	}
+	else
+	{
+		return(x - log1p(exp(x)));
+	}
+}
+
+inline double log1m_from_logit(double x)
+{
+	if(x > 0.0)
+	{
+		return(-x - log1p(exp(-x)));
+	}
+	else
+	{
+		return(-log1p(exp(x)));
+	}
 }
 
 void tnorm_test(double* x, int *n, double *m, double *sigmasqr)
@@ -1155,11 +1277,8 @@ void tnorm_test(double* x, int *n, double *m, double *sigmasqr)
 
 double lc_AB(double x, double *argvec)
 {
-	double out, R, S_j, c;
-	out = -1.0*x*argvec[2] + argvec[0]*lgamma(x + argvec[1]) - argvec[0]*lgamma(x) + argvec[2];
-
-	//gamma test distribution
-//	  out = .001*log(x) - x/.1;
+	double out;
+	out = -1.0*x*argvec[2] + argvec[0]*lgamma(x + argvec[1]) - argvec[0]*lgamma(x);
 	return(out);
 }
 
@@ -1167,9 +1286,6 @@ double lcp_AB(double x, double *argvec)
 {
 	double out;
 	out = -1.0*argvec[2] + argvec[0]*gsl_sf_psi(x + argvec[1]) - argvec[0]*gsl_sf_psi(x);
-
-	//gamma test distribution, derivative.
-//	out = .001/x - 10.0;
 	return(out);
 }
 
@@ -1187,6 +1303,4 @@ double lcp_alpha(double x, double *argvec)
 	return(out);
 }
 
-
-
-
+/********************************************************8 */
