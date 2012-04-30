@@ -102,11 +102,11 @@ void update_data(double *D, int cen_num, int* cen_ind, int* cen_pep, double *Y, 
 		double **Alpha, double *Mu, int n_peptide, double *Sig2, int *cen_pos);
 
 void store_mcmc_output1(double *Mu, double *A, double *B, double *P, double *Sig2, double *D,
-		double *Theta, double kappa, double alpha, double beta,
+		double *Theta, double *Omega_Logit, int* Omega_Ind, double kappa, double alpha, double beta,
 		double m, double c_var, int *n_peptide, int *n_indiv, int *n_position, int *cen_num,
 		double lambda_a, double lambda_b, double a_0, double b_0, int MRF, int ind_pep,
 		FILE *AFILE, FILE *BFILE, FILE *PFILE, FILE *VARFILE, FILE *Sig2FILE, FILE *MUFILE,
-		FILE *DFILE, FILE *THETAFILE);
+		FILE *DFILE, FILE *THETAFILE, FILE *OFILE);
 
 void finalize_prob_include(int *n_iter, int *n_peptide, int *n_indiv,
 		double *OutProbs, int **ProbSum);
@@ -244,13 +244,14 @@ void PMA_mcmc_MS(double *Y, double *hyper_parms, int *pstart,
 	double adptm = 5.0;
 	double adptv = 1.0;
 
-	FILE *AFILE, *BFILE, *PFILE, *VARFILE, *Sig2FILE, *MUFILE, *DFILE, *THETAFILE;
+	FILE *AFILE, *BFILE, *PFILE, *VARFILE, *Sig2FILE, *MUFILE, *DFILE, *THETAFILE, *OFILE;
 
 	if(*write == 1)
 	{
 		AFILE = fopen("afile.txt", "w");
 		BFILE = fopen("bfile.txt", "w");
 		PFILE = fopen("pfile.txt", "w");
+		OFILE = fopen("ofile.txt", "w");
 		VARFILE = fopen("varfile.txt", "w");
 		Sig2FILE = fopen("sig2file.txt", "w");
 		MUFILE = fopen("mufile.txt", "w");
@@ -361,11 +362,12 @@ void PMA_mcmc_MS(double *Y, double *hyper_parms, int *pstart,
 					Alpha, Mu, n);
 			if(*write == 1)
 			{
-				store_mcmc_output1(Mu, A, B, P, Sig2, D, Theta, kappa, alpha, beta,
+				store_mcmc_output1(Mu, A, B, P, Sig2, D, Theta, Omega_Logit,
+						Omega_Ind, kappa, alpha, beta,
 						m, c_var, n_peptide, n_indiv, n_position, cen_num,
 						lambda_a, lambda_b, a_0, b_0, *MRF, *ind_pep,
 						AFILE, BFILE, PFILE, VARFILE, Sig2FILE, MUFILE, DFILE,
-						THETAFILE);
+						THETAFILE, OFILE);
 			}
 		}
 
@@ -404,6 +406,7 @@ void PMA_mcmc_MS(double *Y, double *hyper_parms, int *pstart,
 		fclose(AFILE);
 		fclose(BFILE);
 		fclose(PFILE);
+		fclose(OFILE);
 		fclose(VARFILE);
 		fclose(Sig2FILE);
 		fclose(MUFILE);
@@ -483,14 +486,15 @@ void finalize_prob_include(int *n_iter, int *n_peptide, int *n_indiv, double *Ou
 	return;
 }
 
-void store_mcmc_output1(double *Mu, double *A, double *B, double *P, double *Sig2, double *D,
-		double *Theta, double kappa, double alpha, double beta,
+void store_mcmc_output1(double *Mu, double restrict *A, double *B, double *P, double *Sig2, double *D,
+		double *Theta, double *Omega_Logit, int* Omega_Ind, double kappa, double alpha, double beta,
 		double m, double c_var, int *n_peptide, int *n_indiv, int *n_position, int *cen_num,
 		double lambda_a, double lambda_b, double a_0, double b_0, int MRF, int ind_pep,
 		FILE *AFILE, FILE *BFILE, FILE *PFILE, FILE *VARFILE, FILE *Sig2FILE, FILE *MUFILE,
-		FILE *DFILE, FILE *THETAFILE)
+		FILE *DFILE, FILE *THETAFILE, FILE *OFILE)
 {
 	int p, i, k;
+
 	for(p = 0; p < *n_position; p++)
 	{
 		fprintf(AFILE, "%.6lf \t", A[p]);
@@ -512,6 +516,11 @@ void store_mcmc_output1(double *Mu, double *A, double *B, double *P, double *Sig
 		{
 			fprintf(Sig2FILE, "%.6lf \t", Sig2[p]);
 		}
+	}
+
+	for(p = 0; p < *n_peptide; p++)
+	{
+		fprintf(OFILE, "%.6lf \t", (Omega_Ind[p] == 1) ? expit(Omega_Logit[p]):0.0);
 	}
 
 	for(i = 0; i < *n_indiv; i++)
@@ -536,6 +545,7 @@ void store_mcmc_output1(double *Mu, double *A, double *B, double *P, double *Sig
 	fprintf(AFILE, "\n");
 	fprintf(BFILE, "\n");
 	fprintf(PFILE, "\n");
+	fprintf(OFILE, "\n");
 	fprintf(Sig2FILE, "\n");
 	fprintf(MUFILE, "\n");
 	fprintf(VARFILE, "%.5lf \t %.5lf \t %.5lf \t %.5lf \t %.5lf \t %.5lf \t %.5lf \t %.5lf \t %.5lf \n", m, c_var,
