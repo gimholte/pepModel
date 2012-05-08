@@ -128,10 +128,11 @@ double sample_conditional(double* restrict x,
 		int* restrict num_x,
 		int nmax,
 		double* restrict argvec,
+		int* restrict arglen,
 		ARS_workspace *ws,
 		RngStream rng,
-		double eps, double (*h)(double, double *),
-		double (*h_prime)(double , double *))
+		double eps, double (*h)(double, double *, int *),
+		double (*h_prime)(double , double *, int *))
 {
 	int i, u_section, l_section;
 	int accept = 0;
@@ -149,8 +150,8 @@ double sample_conditional(double* restrict x,
 	for(i = 0; i < *num_x; i++)
 	{
 		const double xval = x[i];
-		const double nhwv = h(xval, argvec);
-		const double nhpwv = h_prime(xval, argvec);
+		const double nhwv = h(xval, argvec, arglen);
+		const double nhpwv = h_prime(xval, argvec, arglen);
 
 		hwv[i] = nhwv;
 		hpwv[i] = nhpwv;
@@ -164,13 +165,13 @@ double sample_conditional(double* restrict x,
 		const double xnew = x[*num_x - 1] + 2.0;
 		x[*num_x - 1] = xnew;
 
-		const double nhpwv = h_prime(x[*num_x - 1], argvec);
+		const double nhpwv = h_prime(x[*num_x - 1], argvec, arglen);
 		hpwv[*num_x - 1] = nhpwv;
 
 		//ws->hpwv[*num_x - 1] = h_prime(x[*num_x - 1], argvec);
 
 	}
-	hwv[*num_x - 1] = h(x[*num_x - 1], argvec);
+	hwv[*num_x - 1] = h(x[*num_x - 1], argvec, arglen);
 
 	//now calculate intersection of lines, z
 	// i-th element corresponds to intersection to right of x[i]
@@ -273,7 +274,7 @@ double sample_conditional(double* restrict x,
 			// and compare directly to outer hull.
 			else
 			{
-				hnew = h(x_samp, argvec);
+				hnew = h(x_samp, argvec, arglen);
 				if(log(W) <= (hnew - u))
 				{
 					// sample accepted!
@@ -292,7 +293,7 @@ double sample_conditional(double* restrict x,
 				else
 				{
 					// failed direct comparison, we add the new sampled value to the hull
-					update = update_hull(x, ws, argvec, num_x, nmax,
+					update = update_hull(x, ws, argvec, arglen, num_x, nmax,
 							x_samp, hnew, l_section, &huzmax, h, h_prime);
 
 					// if update == 1 we added a new point to the lattice
@@ -308,7 +309,7 @@ double sample_conditional(double* restrict x,
 		{
 			// we're on either the left or right edge or the
 			// hull when sampling here
-			hnew = h(x_samp, argvec);
+			hnew = h(x_samp, argvec, arglen);
 			if(log(W) <= (hnew - u))
 			{
 				// sample accepted
@@ -326,7 +327,7 @@ double sample_conditional(double* restrict x,
 			}
 			else
 			{
-				update = update_hull(x, ws, argvec, num_x, nmax,
+				update = update_hull(x, ws, argvec, arglen, num_x, nmax,
 						x_samp, hnew, l_section, &huzmax, h, h_prime);
 				// if update == 1 we added a new point to the lattice
 				// and we must re-normalize the outer hull
@@ -346,13 +347,14 @@ double sample_conditional(double* restrict x,
 int update_hull(double* restrict x,
 		ARS_workspace *ws,
 		double* restrict argvec,
+		int* restrict arglen,
 		int* restrict num_x,
 		int nmax,
 		double xnew,
 		double hnew,
 		int l_section,
 		double* restrict huzmax,
-		double (*h)(double, double *), double (*h_prime)(double , double *))
+		double (*h)(double, double *, int *), double (*h_prime)(double , double *, int*))
 {
 	if(nmax == *num_x)
 	{
@@ -367,7 +369,7 @@ int update_hull(double* restrict x,
 	double* restrict z = ws->z;
 	int i;
 
-	hpnew = h_prime(xnew, argvec);
+	hpnew = h_prime(xnew, argvec, arglen);
 	// we are past l_section, so x_samp goes between
 	// x[l_section - 1] and x[l_section]
 

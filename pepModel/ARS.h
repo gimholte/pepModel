@@ -45,21 +45,23 @@ double sample_conditional(double* restrict x,
 		int* restrict num_x,
 		int nmax,
 		double* restrict argvec,
+		int* restrict arglen,
 		ARS_workspace *ws,
 		RngStream rng,
-		double eps, double (*h)(double, double *),
-		double (*h_prime)(double , double *));
+		double eps, double (*h)(double, double *, int *),
+		double (*h_prime)(double , double *, int *));
 
 int update_hull(double* restrict x,
 		ARS_workspace *ws,
 		double* restrict argvec,
+		int* restrict arglen,
 		int* restrict num_x,
 		int nmax,
 		double xnew,
 		double hnew,
 		int l_section,
 		double* restrict huzmax,
-		double (*h)(double, double *), double (*h_prime)(double , double *));
+		double (*h)(double, double *, int*), double (*h_prime)(double , double *, int*));
 
 double sample_hull(double* restrict x,
 		ARS_workspace *ws,
