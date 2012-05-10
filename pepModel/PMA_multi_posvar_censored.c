@@ -635,7 +635,7 @@ void update_prob_include(int *n_peptide, int *n_indiv, int **Gamma, int **ProbSu
 		for(p = 0; p < *n_peptide; p++)
 		{
 			ProbSum[i][p] += Gamma[i][p];
-			mean_fitted[*n_peptide*i + p] = mean_fitted[*n_peptide*i + p]*((n-1.0)/n) + (Alpha[p] + Mu[i])/n;
+			mean_fitted[*n_peptide*i + p] = mean_fitted[*n_peptide*i + p]*((n-1.0)/n) + (Alpha[p]*Gamma[i][p] + Mu[i])/n;
 		}
 	}
 	return;
