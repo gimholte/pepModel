@@ -78,14 +78,14 @@ int update_position_p1(double **Exprs, int* Omega_Ind, double *Omega_Logit,
 		double a_0, double b_0, double lambda_a, double lambda_b,
 		int p, int *n_indiv, int *pnum, int *pstart, RngStream rng, int nmax,
 		double *xA, double *xB, ARS_workspace *workspace, double eps,
-		int ind_pep, int MRF, double alpha, double beta);
+		int ind_pep, int MRF, double alpha, double beta, int *fix_omega, int n_fix);
 
 void InitializeChain1(int *Omega_Ind, double *Omega_Logit, double *Alpha, int **Gamma,
 		double *Sig2, double *Mu, double *A, double *B, double *P, double *Theta,
 		double *c_var, double *m, double *alpha, double *beta,
 		int *n_position, int *pstart, int *pnum, int *n_peptide, int *n_indiv,
 		int nmax, double **xA, double **xB, double **xEffect,
-		int MRF, int ind_pep);
+		int MRF, int ind_pep, int *fix_omega, int n_fix);
 
 void update_global_parms(double *Alpha, int **Gamma, double *m, double *c_var,
 		double *A, double *B, double *Sig2, double m_0, double v_0, double alpha_0,
@@ -149,7 +149,7 @@ void PMA_mcmc_MS(double *Y, double *hyper_parms, int *pstart,
 		int *n_iter, int *n_sweep, int *n_burn,
 		int *MRF, int *lambda_prior, int *ind_pep, int *var_prior, int *update_u,
 		double *OutProbs, double *mean_fitted, int *write, double *eps, int *nmax,
-		int *accept, int *silent)
+		int *accept, int *silent, int *fix_omega, int *n_fix)
 {
 	R_CStackLimit=(uintptr_t)-1;
 	int p, i, n = 0, j, k;
@@ -335,7 +335,7 @@ void PMA_mcmc_MS(double *Y, double *hyper_parms, int *pstart,
 			&c_var, &m, &alpha, &beta,
 			n_position, pstart, pnum, n_peptide, n_indiv,
 			*nmax, xA, xB, xEffect,
-			*MRF, *ind_pep);
+			*MRF, *ind_pep, fix_omega, *n_fix);
 	PutRNGstate();
 
 	Rprintf("parameters initialized \n");
@@ -383,7 +383,7 @@ void PMA_mcmc_MS(double *Y, double *hyper_parms, int *pstart,
 						a_0, b_0, lambda_a, lambda_b,
 						p, n_indiv, pnum, pstart, rng[th_id], *nmax,
 						xA[p], xB[p], &workspace, *eps, *ind_pep, *MRF,
-						alpha, beta);
+						alpha, beta, fix_omega, *n_fix);
 			}
 
 #pragma omp for nowait
@@ -662,7 +662,7 @@ void InitializeChain1(int *Omega_Ind, double *Omega_Logit,
 		double *c_var, double *m, double *alpha, double *beta,
 		int *n_position, int *pstart, int *pnum, int *n_peptide, int *n_indiv,
 		int nmax, double **xA, double **xB, double **xEffect,
-		int MRF, int ind_pep)
+		int MRF, int ind_pep, int *fix_omega, int n_fix)
 {
 	int c, p, i, g, pep;
 	double u;
@@ -748,6 +748,12 @@ void InitializeChain1(int *Omega_Ind, double *Omega_Logit,
 				}
 			}
 		}
+	}
+
+	for(p = 0; p < n_fix; p++)
+	{
+		Omega_Ind[fix_omega[p]] = 1;
+		Omega_Logit[fix_omega[p]] = log(4.0);
 	}
 
 	return;
@@ -1024,12 +1030,12 @@ int update_position_p1(double **Exprs, int* Omega_Ind, double *Omega_Logit,
 		double a_0, double b_0, double lambda_a, double lambda_b,
 		int p, int *n_indiv, int *pnum, int *pstart, RngStream rng, int nmax,
 		double *xA, double *xB, ARS_workspace *workspace, double eps,
-		int ind_pep, int MRF, double alpha, double beta)
+		int ind_pep, int MRF, double alpha, double beta, int *fix_omega, int n_fix)
 {
 	double s_log_w = 0.0, s_log_1minus_w = 0.0;
 	double frac, R;
 
-	int c, S_p = 0, i;
+	int c, S_p = 0, i, k, con, n_out = 0;
 	int num_x = 2;
 	int p_begin = pstart[p];
 	double N_cp = 0.0;
@@ -1038,7 +1044,18 @@ int update_position_p1(double **Exprs, int* Omega_Ind, double *Omega_Logit,
 	// update A's and B's
 	for(c = 0; c < pnum[p]; c++)
 	{
-		if(Omega_Ind[p_begin + c] == 1)
+		con = 0;
+		for(k = 0; k < n_fix; k++)
+		{
+			if((p_begin + c) == fix_omega[k])
+			{
+				n_out++;
+				con = 1;
+				break;
+			}
+		}
+
+		if(con == 0, (Omega_Ind[p_begin + c] == 1))
 		{
 			s_log_w += log_from_logit(Omega_Logit[p_begin + c]);
 			s_log_1minus_w += log1m_from_logit(Omega_Logit[p_begin + c]);
@@ -1084,7 +1101,7 @@ int update_position_p1(double **Exprs, int* Omega_Ind, double *Omega_Logit,
 	//update Ps
 	if(MRF == 0)
 	{
-		P[p] = RngStream_LogitBeta(a_0 + (double)(pnum[p] - S_p), b_0 + (double)(S_p), rng);
+		P[p] = RngStream_LogitBeta(a_0 + (double)(pnum[p] - S_p - n_out), b_0 + (double)(S_p), rng);
 	}
 
 	frac = lbeta(A[p], (double)(*n_indiv) + B[p])- lbeta(A[p], B[p]);
@@ -1096,7 +1113,19 @@ int update_position_p1(double **Exprs, int* Omega_Ind, double *Omega_Logit,
 	// update Omegas
 	for(c = 0; c < pnum[p]; c++)
 	{
+		con = 0;
 		pep = p_begin + c;
+		for(k = 0; k < n_fix; k++)
+		{
+			if(pep == fix_omega[k])
+			{
+				con = 1;
+				break;
+			}
+		}
+		if(con == 1)
+			continue;
+
 		for(i = 0; i < *n_indiv; i++)
 		{
 			N_cp += (double)Gamma[i][pep];
