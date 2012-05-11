@@ -890,7 +890,7 @@ void update_global_parms(double *Alpha, int **Gamma, double *m, double *c_var, d
 	}
 
 	musqrsum = musqrsum/2.0 + 1.0;
-	*kappa = RngStream_GA1(((double)n_peptide)/2.0 + 1.0)/musqrsum;
+	*kappa = RngStream_GA1(((double)n_peptide)/2.0 + 1.0, rng)/musqrsum;
 
 	return;
 }
