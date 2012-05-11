@@ -26,6 +26,20 @@
 
 #define ZZERO DBL_MIN
 
+
+/*
+ * peptide specific mu with mean zero, variance tau
+ * sigma constant across positions
+ * alpha with prior variance depending on position
+ * t-distributed errors
+ * fix omega <= 80%
+ */
+
+
+
+
+
+
 //
 double lc_AB(double x, double *argvec, int *arglen);
 
@@ -1024,7 +1038,7 @@ int update_position_p1(double **Exprs, int* Omega_Ind, double *Omega_Logit,
 	// update A's and B's
 	for(c = 0; c < pnum[p]; c++)
 	{
-		if(Omega_Ind[c] == 1)
+		if(Omega_Ind[p_begin + c] == 1)
 		{
 			s_log_w += log_from_logit(Omega_Logit[p_begin + c]);
 			s_log_1minus_w += log1m_from_logit(Omega_Logit[p_begin + c]);
