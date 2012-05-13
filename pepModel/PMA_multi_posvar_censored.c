@@ -50,6 +50,10 @@ void update_var_pars(double *Sig2, double *alpha, double *beta,
 		int n_max, int ind_pep, int n_peptide,
 		int n_position, RngStream rng, double eps);
 
+void update_mu_pep(double *Mu, double **Exprs, double **Alpha,
+		int **Gamma, double Sig2, double kappa, int n_indiv, int pep,
+		RngStream rng);
+
 void update_indiv_j1(double *Exprs, double *Alpha, double *mu_j, int* Omega_Ind,
 		double *Omega_Logit, int *Gamma,
 		double *Sig2, double m, double c_var,
@@ -281,8 +285,9 @@ void PMA_mcmc_MS(double *Y, double *hyper_parms, int *pstart,
 		}
 	}
 
-	int th_id;
+	int th_id, pep;
 	RngStream rng[*nP];
+	double sigma;
 	for(i = 0; i < *nP; i++)
 	{
 		rng[i] = RngStream_CreateStream("");
@@ -321,7 +326,7 @@ void PMA_mcmc_MS(double *Y, double *hyper_parms, int *pstart,
 
 		update_kappa(Mu, &kappa, *n_peptide, rng[0]);
 
-#pragma omp parallel private(th_id, workspace) num_threads(*nP)
+#pragma omp parallel private(th_id, workspace, sigma) num_threads(*nP)
 		{
 			th_id = omp_get_thread_num();
 #pragma omp for nowait
@@ -344,6 +349,13 @@ void PMA_mcmc_MS(double *Y, double *hyper_parms, int *pstart,
 						n_position, n_peptide, *ind_pep, rng[th_id]);
 			}
 		}
+#pragma omp for nowait
+			for(pep = 0; pep < *n_peptide; pep++)
+			{
+				update_mu_pep(Mu, Exprs, Alpha,
+						Gamma, Sig2[pep], kappa, *n_indiv, pep,
+						rng[th_id]);
+			}
 
 		if(*update_u == 1)
 		{
@@ -552,8 +564,8 @@ void store_mcmc_output1(double *Mu, double *A, double *B, double *P, double *Sig
 	return;
 }
 
-void update_mu_pep(double *Mu, const double **Exprs, const double **Alpha,
-		const int **Gamma, double Sig2, double kappa, int n_indiv, int pep,
+void update_mu_pep(double *Mu, double **Exprs, double **Alpha,
+		int **Gamma, double Sig2, double kappa, int n_indiv, int pep,
 		RngStream rng)
 {
 	double S_dot = 0.0, V_dot = 0.0;
