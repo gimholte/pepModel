@@ -118,7 +118,7 @@ double truncNorm_parallel(double mean, double sigmasqr, RngStream rng);
 
 double truncNorm(double mean, double sigmasqr);
 
-void update_data(double *D, int cen_num, int* cen_ind, int* cen_pep, double *Y, double **Exprs,
+void update_data(double **W, double *D, int cen_num, int* cen_ind, int* cen_pep, double *Y, double **Exprs,
 		int **Gamma, double *Alpha, double *Mu, int n_peptide, double *Sig2, int *cen_pos);
 
 void store_mcmc_output1(double *Alpha, double *Mu, double *A, double *B, double *P, double *Sig2, double *D,
@@ -415,7 +415,7 @@ void PMA_mcmc_MS(double *Y, double *hyper_parms, int *pstart,
 		// check whether we need to update complete data
 		if(*cen_num > 0)
 		{
-			update_data(D, *cen_num, cen_ind, cen_pep, Y, Exprs,
+			update_data(W, D, *cen_num, cen_ind, cen_pep, Y, Exprs,
 					Gamma, Alpha, Mu, *n_peptide, Sig2, cen_pos);
 		}
 
@@ -679,19 +679,20 @@ void store_mcmc_output1(double *Alpha, double *Mu, double *A, double *B, double 
 	return;
 }
 
-void update_data(double *D, int cen_num, int* cen_ind, int* cen_pep, double *Y, double **Exprs,
+void update_data(double **W, double *D, int cen_num, int* cen_ind, int* cen_pep, double *Y, double **Exprs,
 		int **Gamma, double *Alpha, double *Mu, int n_peptide, double *Sig2, int *cen_pos)
 {
 	int i, p, k, pos;
-	double tmp;
+	double tmp, weight;
 	for(k = 0; k < cen_num; k++)
 	{
 		// retrieve indices
 		i = cen_ind[k];
 		p = cen_pep[k];
 		pos = cen_pos[k];
+		weight = W[p][i];
 
-		tmp = truncNorm(Mu[p] + Alpha[p]*(double)Gamma[i][p] - Y[i*n_peptide + p], Sig2[pos]);
+		tmp = truncNorm(Mu[p] + Alpha[p]*(double)Gamma[i][p] - Y[i*n_peptide + p], Sig2[pos]/weight);
 		Exprs[i][p] = Y[i*n_peptide + p] + tmp;
 		D[k] = tmp;
 		//Rprintf("censored data %d updated \n", k);
