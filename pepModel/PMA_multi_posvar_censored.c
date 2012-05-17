@@ -128,6 +128,9 @@ void store_mcmc_output1(double *Alpha, double *Mu, double *A, double *B, double 
 		FILE *AFILE, FILE *BFILE, FILE *PFILE, FILE *VARFILE, FILE *Sig2FILE, FILE *MUFILE,
 		FILE *DFILE, FILE *THETAFILE, FILE *OFILE, FILE *ALPHAFILE);
 
+void slidingWindow(int** Gamma, int *cladePos, int *window, int *cladeCounts, int n_clade,
+		int n_indiv);
+
 void finalize_prob_include(int *n_iter, int *n_peptide, int *n_indiv,
 		double *OutProbs, int **ProbSum);
 
@@ -150,7 +153,8 @@ void PMA_mcmc_MS(double *Y, double *hyper_parms, int *pstart,
 		int *n_iter, int *n_sweep, int *n_burn,
 		int *MRF, int *lambda_prior, int *ind_pep, int *var_prior, int *update_u,
 		double *OutProbs, double *mean_fitted, int *write, double *eps, int *nmax,
-		int *accept, int *silent)
+		int *accept, int *silent, int *sliding, int *window, int *cladePos, int *n_clade,
+		int *cladeCounts)
 {
 	R_CStackLimit=(uintptr_t)-1;
 	int p, i, n = 0, j, k;
@@ -420,6 +424,11 @@ void PMA_mcmc_MS(double *Y, double *hyper_parms, int *pstart,
 			n = n + 1.0;
 			update_prob_include(n_peptide, n_indiv, Gamma, ProbSum, mean_fitted,
 					Alpha, Mu, n);
+			if(*sliding == 1)
+			{
+				slidingWindow(Gamma, cladePos, window, cladeCounts,
+						*n_clade, *n_indiv);
+			}
 			if(*write == 1)
 			{
 				store_mcmc_output1(Alpha, Mu, A, B, P, Sig2, D, Theta, Omega_Logit,
@@ -542,6 +551,53 @@ void PMA_mcmc_MS(double *Y, double *hyper_parms, int *pstart,
 	free(Gamma);
 
 
+	return;
+}
+
+void slidingWindow(int** Gamma, int *cladePos, int *window, int *cladeCounts, int n_clade,
+		int n_indiv)
+{
+	int i, c, pep, k, ind, upr, lwr, mid, begin;
+	int upr_prod, lwr_prod, cpos_stt = 0;
+	int num_clade_peps;
+
+	for(c = 0; c < n_clade; c++)
+	{
+		num_clade_peps = cladeCounts[c];
+		if(num_clade_peps > 3)
+		{
+			for(i = 0; i < n_indiv; i++)
+			{
+				int *Gamma_i = Gamma[i];
+				begin = cpos_stt*n_indiv + i*num_clade_peps;
+				lwr = Gamma_i[cladePos[cpos_stt]];
+				mid = Gamma_i[cladePos[cpos_stt + 1]];
+				lwr_prod = lwr*mid;
+				k = begin;
+				window[k] = window[k] + lwr_prod;
+
+				for(ind = 1; ind < (num_clade_peps - 1) ; ind++)
+				{
+					pep = cladePos[cpos_stt + ind + 1];
+					upr = Gamma_i[pep];
+					upr_prod = mid*upr;
+
+					if(upr_prod + lwr_prod > 0)
+					{
+						k = begin + ind;
+						window[k] = window[k] + 1;
+					}
+
+					lwr_prod = upr_prod;
+					mid = upr;
+				}
+
+				k = begin + num_clade_peps - 1;
+				window[k] = window[k] + upr*mid;
+			}
+		}
+		cpos_stt += cladeCounts[c];
+	}
 	return;
 }
 
