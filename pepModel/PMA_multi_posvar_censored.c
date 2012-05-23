@@ -107,9 +107,10 @@ void update_peptide_p(double *W, double **Exprs, double *Alpha, int **Gamma, int
 		double *argvec, int nmax, ARS_workspace *workspace, double eps, RngStream rng);
 
 void update_dof_integrated(double *dof, double **Exprs, double *Alpha, int **Gamma,
-		double *Sig2, double *Mu,
+		double *Sig2, double *Mu, double *workspace,
 		int n_indiv, int n_peptide,
 		RngStream rng);
+
 
 void tnorm_test(double* x, int *n, double *m, double *sigmasqr);
 
@@ -286,6 +287,7 @@ void PMA_mcmc_MS(double *Y, double *hyper_parms, int *pstart,
 	B = (double*) malloc(*n_position*sizeof(double));
 	P = (double*) malloc(*n_position*sizeof(double));
 	Mu = (double*) malloc(*n_peptide*sizeof(double));
+	double* likworkspace = malloc((*n_peptide)*(*n_indiv)*sizeof(double));
 
 	// check whether our data is censored at all,
 	// if so prepare for augmentation.
@@ -381,7 +383,7 @@ void PMA_mcmc_MS(double *Y, double *hyper_parms, int *pstart,
 				xAlpha, *nmax, *eps);
 
 		update_dof_integrated(&dof, Exprs, Alpha, Gamma,
-				Sig2, Mu, *n_indiv, *n_peptide, rng[0]);
+				Sig2, Mu, likworkspace, *n_indiv, *n_peptide, rng[0]);
 
 #pragma omp parallel private(th_id, workspace, pos, sigma) num_threads(*nP)
 		{
@@ -554,6 +556,7 @@ void PMA_mcmc_MS(double *Y, double *hyper_parms, int *pstart,
 		free(Alpha_argvec[i]);
 	}
 	free(xEffect);
+	free(likworkspace);
 	free(W);
 	free(Alpha_argvec);
 	free(xA);
@@ -931,7 +934,7 @@ void update_dof(double *dof, double **W, int n_indiv, int n_peptide,
 */
 
 void update_dof_integrated(double *dof, double **Exprs, double *Alpha, int **Gamma,
-		double *Sig2, double *Mu,
+		double *Sig2, double *Mu, double *workspace,
 		int n_indiv, int n_peptide,
 		RngStream rng)
 {
@@ -944,13 +947,16 @@ void update_dof_integrated(double *dof, double **Exprs, double *Alpha, int **Gam
 	double lik_sum[nv];
 	double v;
 	double ds;
+	double lik_temp = 0.0;
 
 	for(k = 0; k < nv; k++)
 	{
 		log_lik[k] = 0.0;
 	}
 
+#pragma omp parallel for private(p, ds)
 	// compute the vicious log-sum
+
 	for(i = 0; i < n_indiv; i++)
 	{
 		int *gam_i = Gamma[i];
@@ -966,15 +972,20 @@ void update_dof_integrated(double *dof, double **Exprs, double *Alpha, int **Gam
 			ds = gsl_pow_2(y - mu - alpha);
 			ds = ds / (2.0 * sig2);
 
-			for(k = 0; k < nv; k++)
-			{
-				double log_lik_cur = log_lik[k];
-				v = V[k];
-
-				log_lik_cur = log_lik_cur + log(ds + v/2.0);
-				log_lik[k] = log_lik_cur;
-			}
+			workspace[i*n_peptide + p] = ds;
 		}
+	}
+
+#pragma omp parallel for private(lik_temp, i, v, ds)
+	for(k = 0; k < nv; k++)
+	{
+		v = V[k];
+		lik_temp = 0.0;
+		for(i = 0; i < (n_indiv*n_peptide); i++)
+		{
+			lik_temp = lik_temp + log(workspace[i] + v/2.0);
+		}
+		log_lik[k] = lik_temp;
 	}
 
 	double lik_max;
