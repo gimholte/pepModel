@@ -27,7 +27,6 @@
 // function to test the sampler, not used in main function.
 void check_sample(double x_samp, double *x, ARS_workspace *ws, int *num_x);
 void print_hull(double *x, ARS_workspace *ws, int *num_x);
-double log_apb(double loga, double logb);
 
 /*
 double lc_AB(double x, double* restrict argvec);

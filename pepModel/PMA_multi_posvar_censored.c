@@ -57,6 +57,11 @@ inline double expit(double x);
 
 inline double m1expit(double x);
 
+double dof_likelihood(double **W, int n_indiv, int n_peptide);
+
+void update_dof(double *dof, double **W, int n_indiv, int n_peptide,
+		RngStream rng);
+
 void update_u_pars(double *P, double *a_0, double *b_0,
 		double *xA0, double *xB0, int n_position, double psi_a,
 		double psi_b, RngStream rng, int nmax, double eps);
@@ -101,6 +106,11 @@ void update_peptide_p(double *W, double **Exprs, double *Alpha, int **Gamma, int
 		int pep, int n_indiv, int pos, double *xEffect,
 		double *argvec, int nmax, ARS_workspace *workspace, double eps, RngStream rng);
 
+void update_dof_integrated(double *dof, double **Exprs, double *Alpha, int **Gamma,
+		double *Sig2, double *Mu,
+		int n_indiv, int n_peptide,
+		RngStream rng);
+
 void tnorm_test(double* x, int *n, double *m, double *sigmasqr);
 
 void update_lambdas(double *lambda_a, double *lambda_b, double r_a,
@@ -123,7 +133,7 @@ void update_data(double **W, double *D, int cen_num, int* cen_ind, int* cen_pep,
 
 void store_mcmc_output1(double *Alpha, double *Mu, double *A, double *B, double *P, double *Sig2, double *D,
 		double *Theta, double *Omega_Logit, int* Omega_Ind, double kappa, double alpha, double beta,
-		double m, double c_var, int *n_peptide, int *n_indiv, int *n_position, int *cen_num,
+		double m, double c_var, double dof, int *n_peptide, int *n_indiv, int *n_position, int *cen_num,
 		double lambda_a, double lambda_b, double a_0, double b_0, int MRF, int ind_pep,
 		FILE *AFILE, FILE *BFILE, FILE *PFILE, FILE *VARFILE, FILE *Sig2FILE, FILE *MUFILE,
 		FILE *DFILE, FILE *THETAFILE, FILE *OFILE, FILE *ALPHAFILE);
@@ -370,6 +380,8 @@ void PMA_mcmc_MS(double *Y, double *hyper_parms, int *pstart,
 				&accept_c, rng[0], adptm, adptv, *ind_pep, *var_prior,
 				xAlpha, *nmax, *eps);
 
+		update_dof_integrated(&dof, Exprs, Alpha, Gamma,
+				Sig2, Mu, *n_indiv, *n_peptide, rng[0]);
 
 #pragma omp parallel private(th_id, workspace, pos, sigma) num_threads(*nP)
 		{
@@ -395,6 +407,7 @@ void PMA_mcmc_MS(double *Y, double *hyper_parms, int *pstart,
 						xA[p], xB[p], &workspace, *eps, *ind_pep, *MRF,
 						alpha, beta);
 			}
+
 /*
 #pragma omp for nowait
 			for(j = 0; j < *n_indiv; j++)
@@ -433,7 +446,7 @@ void PMA_mcmc_MS(double *Y, double *hyper_parms, int *pstart,
 			{
 				store_mcmc_output1(Alpha, Mu, A, B, P, Sig2, D, Theta, Omega_Logit,
 						Omega_Ind, kappa, alpha, beta,
-						m, c_var, n_peptide, n_indiv, n_position, cen_num,
+						m, c_var, dof, n_peptide, n_indiv, n_position, cen_num,
 						lambda_a, lambda_b, a_0, b_0, *MRF, *ind_pep,
 						AFILE, BFILE, PFILE, VARFILE, Sig2FILE, MUFILE, DFILE,
 						THETAFILE, OFILE, ALPHAFILE);
@@ -616,7 +629,7 @@ void finalize_prob_include(int *n_iter, int *n_peptide, int *n_indiv, double *Ou
 
 void store_mcmc_output1(double *Alpha, double *Mu, double *A, double *B, double *P, double *Sig2, double *D,
 		double *Theta, double *Omega_Logit, int* Omega_Ind, double kappa, double alpha, double beta,
-		double m, double c_var, int *n_peptide, int *n_indiv, int *n_position, int *cen_num,
+		double m, double c_var, double dof, int *n_peptide, int *n_indiv, int *n_position, int *cen_num,
 		double lambda_a, double lambda_b, double a_0, double b_0, int MRF, int ind_pep,
 		FILE *AFILE, FILE *BFILE, FILE *PFILE, FILE *VARFILE, FILE *Sig2FILE, FILE *MUFILE,
 		FILE *DFILE, FILE *THETAFILE, FILE *OFILE, FILE *ALPHAFILE)
@@ -674,8 +687,8 @@ void store_mcmc_output1(double *Alpha, double *Mu, double *A, double *B, double 
 	fprintf(OFILE, "\n");
 	fprintf(Sig2FILE, "\n");
 	fprintf(MUFILE, "\n");
-	fprintf(VARFILE, "%.5lf \t %.5lf \t %.5lf \t %.5lf \t %.5lf \t %.5lf \t %.5lf \t %.5lf \t %.5lf \n", m, c_var,
-			lambda_a, lambda_b, kappa, alpha, beta, a_0, b_0);
+	fprintf(VARFILE, "%.5lf \t %.5lf \t %.5lf \t %.5lf \t %.5lf \t %.5lf \t %.5lf \t %.5lf \t %.5lf \t %.5lf \n", m, c_var,
+			lambda_a, lambda_b, kappa, alpha, beta, a_0, b_0, dof);
 	return;
 }
 
@@ -871,6 +884,144 @@ void update_MRF(double *P, double *Theta, double *Omega,
 
 	return;
 }
+/*
+void update_dof(double *dof, double **W, int n_indiv, int n_peptide,
+		RngStream rng)
+{
+	double lik_term = dof_likelihood(W, n_indiv, n_peptide);
+	//Rprintf("likelihood term = %.5lf \n", lik_term);
+	double V[] = {2.0, 4.0, 8.0, 16.0, 32.0, 64.0};
+
+	int i, nv = 6;
+	const double n_obs = (double)(n_indiv*n_peptide);
+	double log_cprob[nv];
+	double log_lik[nv];
+	double lik_sum[nv];
+	double v;
+
+	// compute normalized probabilities on log scale
+	for(i = 0; i < nv; i++)
+	{
+		v = V[i];
+		log_lik[i] = lik_term*v + n_obs*(v/2.0)*log(v/2.0) - n_obs*lgamma(v/2.0);
+		lik_sum[i] = (i == 0) ? log_lik[i] : log_apb(log_lik[i], lik_sum[i-1]);
+	}
+
+	for(i = 0; i < nv; i++)
+	{
+		log_cprob[i] = lik_sum[i] - lik_sum[nv - 1];
+		//Rprintf("%.5lf ", exp(log_cprob[i]));
+	}
+	//Rprintf("\n");
+	// sample from V
+	int j = 0;
+	double u = log(RngStream_RandU01(rng));
+	while(1)
+	{
+		if(log_cprob[j] >= u)
+		{
+			break;
+		}
+		j++;
+	}
+
+	*dof = V[j];
+	return;
+}
+*/
+
+void update_dof_integrated(double *dof, double **Exprs, double *Alpha, int **Gamma,
+		double *Sig2, double *Mu,
+		int n_indiv, int n_peptide,
+		RngStream rng)
+{
+	double V[] = {2.0, 4.0, 6.0, 8.0, 10.0, 12.0, 16.0, 32.0, 64.0};
+
+	int i,p,k, nv = 9;
+	const double n_obs = (double)(n_indiv*n_peptide);
+	double log_cprob[nv];
+	double log_lik[nv];
+	double lik_sum[nv];
+	double v;
+	double ds;
+
+	for(k = 0; k < nv; k++)
+	{
+		log_lik[k] = 0.0;
+	}
+
+	// compute the vicious log-sum
+	for(i = 0; i < n_indiv; i++)
+	{
+		int *gam_i = Gamma[i];
+		double *y_i = Exprs[i];
+		for(p = 0; p < n_peptide; p++)
+		{
+			const double y = y_i[p];
+			const double mu = Mu[p];
+			const int gam = gam_i[p];
+			const double alpha = (gam == 1) ? Alpha[p]:0.0;
+			const double sig2 = Sig2[p];
+
+			ds = gsl_pow_2(y - mu - alpha);
+			ds = ds / (2.0 * sig2);
+
+			for(k = 0; k < nv; k++)
+			{
+				double log_lik_cur = log_lik[k];
+				v = V[k];
+
+				log_lik_cur = log_lik_cur + log(ds + v/2.0);
+				log_lik[k] = log_lik_cur;
+			}
+		}
+	}
+
+	double lik_max;
+	// compute normalized probabilities on log scale
+	for(i = 0; i < nv; i++)
+	{
+		v = V[i];
+	//	Rprintf("%.0lf ", log_lik[i]);
+		log_lik[i] = n_obs*(v/2.0)*log(v/2.0) + n_obs*lgamma(.5 + v/2.0) -
+				n_obs*lgamma(v/2.0) - (v/2.0 + .5)*log_lik[i];
+		lik_max = (i == 0) ? log_lik[i] : lik_max;
+		lik_max = (lik_max > log_lik[i]) ? lik_max : log_lik[i];
+
+	}
+	//Rprintf("\n");
+
+	for(i = 0; i < nv; i++)
+	{
+		v = V[i];
+		log_lik[i] = log_lik[i] - lik_max;
+		lik_sum[i] = (i == 0) ? log_lik[i] : log_apb(log_lik[i], lik_sum[i-1]);
+		//Rprintf("%.5lf ", log_lik[i]);
+	}
+	//Rprintf("\n");
+
+	for(i = 0; i < nv; i++)
+	{
+		log_cprob[i] = lik_sum[i] - lik_sum[nv - 1];
+		//Rprintf("%.2lf ", log_cprob[i]);
+	}
+	//Rprintf("\n \n");
+	// sample from V
+	int j = 0;
+	double u = log(RngStream_RandU01(rng));
+	while(1)
+	{
+		if(log_cprob[j] >= u)
+		{
+			break;
+		}
+		j++;
+	}
+
+	*dof = V[j];
+	return;
+}
+
 void update_global_parms(double *Alpha, int **Gamma, double *m, double *c_var, double *kappa,
 		double *Mu, double *A, double *B, double *Sig2, double m_0, double v_0, double alpha_0,
 		double beta_0, double *alpha, double *beta, int lambda_prior,
@@ -1504,6 +1655,26 @@ double lcp_alpha(double x, double *argvec, int *arglen)
 	double out;
 	out = -argvec[0] - argvec[1]*gsl_sf_psi(x);
 	return(out);
+}
+
+double dof_likelihood(double **W, int n_indiv, int n_peptide)
+{
+	double S = 0.0;
+	double wip;
+	int i, p;
+
+#pragma omp parallel for private(wip, i) reduction(+:S) schedule(static, 1)
+		for(p = 0; p < n_peptide; p++)
+		{
+			double *W_pep = W[p];
+			for(i = 0; i < n_indiv; i++)
+			{
+				wip = W_pep[i];
+				S = S + log(wip) - wip;
+			}
+		}
+
+	return(.5*S);
 }
 
 /*

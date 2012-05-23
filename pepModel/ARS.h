@@ -75,3 +75,4 @@ void initialize_hull(double* restrict x,
 		int num_x,
 		double huzmax);
 
+double log_apb(double loga, double logb);
