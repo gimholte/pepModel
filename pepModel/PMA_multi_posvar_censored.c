@@ -724,10 +724,9 @@ void update_data(double **W, double *D, int cen_num, int* cen_ind, int* cen_pep,
 		// retrieve indices
 		i = cen_ind[k];
 		p = cen_pep[k];
-		pos = cen_pos[k];
 		weight = W[p][i];
 
-		tmp = truncNorm_parallel(Mu[p] + Alpha[p]*(double)Gamma[i][p] - Y[i*n_peptide + p], Sig2[pos]/weight,
+		tmp = truncNorm_parallel(Mu[p] + Alpha[p]*(double)Gamma[i][p] - Y[i*n_peptide + p], Sig2[p]/weight,
 				rng);
 		Exprs[i][p] = Y[i*n_peptide + p] + tmp;
 		D[k] = tmp;
