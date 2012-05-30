@@ -217,7 +217,7 @@ void PMA_mcmc_MS(double *Y, double *hyper_parms, int *pstart,
 	Alpha = (double*) malloc(*n_peptide*sizeof(double));
 	xEffect = (double**) malloc(*n_peptide*sizeof(double*));
 	Alpha_argvec = (double**) malloc(*nP * sizeof(double*));
-	W = malloc(*n_peptide*sizeof(double*));
+	W = (double **) malloc(*n_peptide*sizeof(double*));
 
 	for(i = 0; i < *nP; i++)
 	{
@@ -227,7 +227,7 @@ void PMA_mcmc_MS(double *Y, double *hyper_parms, int *pstart,
 	for(p = 0; p < *n_peptide; p++)
 	{
 		xEffect[p] = (double*) malloc(*nmax*sizeof(double));
-		W[p] = malloc(*n_indiv*sizeof(double));
+		W[p] = (double *) malloc(*n_indiv*sizeof(double));
 	}
 
 	// xA and xB hold starting values for ARS of a_p and b_p
@@ -442,7 +442,7 @@ void PMA_mcmc_MS(double *Y, double *hyper_parms, int *pstart,
 		}
 
 		// check whether we need to update complete data
-		if(*cen_num > 0)
+		if(*cen_num > 0 & i > *n_burn/2)
 		{
 			update_data(W, D, *cen_num, cen_ind, cen_pep, Y, Exprs,
 					Gamma, Alpha, Mu, *n_peptide, Sig2, cen_pos, rng[0]);
@@ -713,7 +713,8 @@ void store_mcmc_output1(double *Alpha, double *Mu, double *A, double *B, double 
 	return;
 }
 
-void update_data(double **W, double *D, int cen_num, int* cen_ind, int* cen_pep, double *Y, double **Exprs,
+void update_data(double **W, double *D, int cen_num, int* cen_ind,
+		int* cen_pep, double *Y, double **Exprs,
 		int **Gamma, double *Alpha, double *Mu, int n_peptide, double *Sig2, int *cen_pos,
 		RngStream rng)
 {
@@ -726,11 +727,10 @@ void update_data(double **W, double *D, int cen_num, int* cen_ind, int* cen_pep,
 		p = cen_pep[k];
 		weight = W[p][i];
 
-		tmp = truncNorm_parallel(Mu[p] + Alpha[p]*(double)Gamma[i][p] - Y[i*n_peptide + p], Sig2[p]/weight,
+		tmp = truncNorm_parallel(Mu[p] + Alpha[p]*Gamma[i][p] - Y[i*n_peptide + p], Sig2[p]/weight,
 				rng);
 		Exprs[i][p] = Y[i*n_peptide + p] + tmp;
 		D[k] = tmp;
-		//Rprintf("censored data %d updated \n", k);
 	}
 	return;
 }
