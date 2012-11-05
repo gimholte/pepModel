@@ -1,2 +1,5 @@
 /Rcompile
 /Debug
+/.cproject
+/.gitignore
+/.project

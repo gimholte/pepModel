@@ -31,6 +31,7 @@ typedef struct ARS_WORKSPACE ARS_workspace;
 #include <stdio.h>
 #include <math.h>
 #include <Rversion.h>
+#include <float.h>
 
 #if (R_VERSION >= R_Version(2,3,0))
 #define R_INTERFACE_PTRS 1
@@ -38,17 +39,13 @@ typedef struct ARS_WORKSPACE ARS_workspace;
 #include <Rinterface.h>
 #endif
 
-#include <gsl/gsl_math.h>
-#include <gsl/gsl_sf.h>
-
 double sample_conditional(double* restrict x,
 		int* restrict num_x,
-		int nmax,
 		double* restrict argvec,
 		int* restrict arglen,
 		ARS_workspace *ws,
 		RngStream rng,
-		double eps, double (*h)(double, double *, int *),
+		double (*h)(double, double *, int *),
 		double (*h_prime)(double , double *, int *));
 
 int update_hull(double* restrict x,
@@ -56,7 +53,6 @@ int update_hull(double* restrict x,
 		double* restrict argvec,
 		int* restrict arglen,
 		int* restrict num_x,
-		int nmax,
 		double xnew,
 		double hnew,
 		int l_section,
