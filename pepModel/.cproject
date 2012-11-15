@@ -34,7 +34,7 @@
 								<option defaultValue="gnu.c.optimization.level.none" id="gnu.c.compiler.so.debug.option.optimization.level.2126792569" name="Optimization Level" superClass="gnu.c.compiler.so.debug.option.optimization.level" valueType="enumerated"/>
 								<option id="gnu.c.compiler.so.debug.option.debugging.level.1079782297" name="Debug Level" superClass="gnu.c.compiler.so.debug.option.debugging.level" value="gnu.c.debugging.level.max" valueType="enumerated"/>
 								<option id="gnu.c.compiler.option.include.paths.1002132776" name="Include paths (-I)" superClass="gnu.c.compiler.option.include.paths" valueType="includePath">
-									<listOptionValue builtIn="false" value="/usr/share/lib/R/include"/>
+									<listOptionValue builtIn="false" value="/usr/share/R/include"/>
 									<listOptionValue builtIn="false" value="/usr/include/gsl"/>
 									<listOptionValue builtIn="false" value="/usr/include"/>
 								</option>
