@@ -57,7 +57,7 @@ void sample_one(double* start_val, int* n_max, double* S_j, double* c, double* R
 	return;
 }
 
-/* Reference:
+ * Reference:
  * Gilks and Wild (1992)
  * "Adaptive Rejection Sampling for Gibbs Sampling"
  *
@@ -103,7 +103,6 @@ double sample_conditional(double* restrict x,
 		double (*h_prime)(double , double *, int *))
 {
 	int i, u_section, l_section;
-	int accept = 0;
 	int attempts = 0;
 	int update = 0;
 
@@ -309,6 +308,7 @@ double sample_conditional(double* restrict x,
 
 	print_hull(x, ws, num_x);
 	error("Rejection Sampler failed \n");
+	return(-1.0);
 }
 
 // insert a new abcissae in the hull, update the Z and
@@ -452,8 +452,8 @@ double sample_hull(double* restrict x,
 		double huzmax)
 {
 	int j = 0;
-	double R, y;
-	double a, b, pstar;
+	double y;
+	double b, pstar;
 	double logp = log(p);
 
 	double* restrict scum_norm = ws->scum_norm;
@@ -472,7 +472,6 @@ double sample_hull(double* restrict x,
 	const double hwv_j = hwv[j];
 	const double hpwv_j	= hpwv[j];
 	const double x_j = x[j];
-	const double z_j = z[j];
 	const double z_jm1 = z[j - 1];
 	const double scum_max = scum[*num_x - 1];
 	const double scum_jm1 = scum[j-1];
@@ -516,7 +515,6 @@ void initialize_hull(double* restrict x,
 {
 	// compute the integrals for the upper hull sections.
 	int i;
-	double tmp;
 	double* restrict hpwv = ws->hpwv;
 	double* restrict hwv = ws->hwv;
 	double* restrict z = ws->z;

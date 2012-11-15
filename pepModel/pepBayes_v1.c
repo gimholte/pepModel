@@ -55,7 +55,7 @@ void pepbayes_v1(double *Y, double *hyper_param, int *pstart,
 {
 	R_CStackLimit = (uintptr_t)-1;
 	// miscellaneous useful quantities
-	int p, i, n = 0, j, k = 0, c, d;
+	int p, i, j, k = 0, c, d;
 	int pep, pos, th_id;
 	int *pos_ind_by_pep;
 	double *ProbSum;
@@ -258,7 +258,7 @@ void pepbayes_v1(double *Y, double *hyper_param, int *pstart,
 		}
 
 		// check whether we need to update complete data
-		if(*cen_num > 0 & i > *n_burn/2)
+		if((*cen_num > 0) & (i > *n_burn/2))
 		{
 			update_censoring(W, D, *cen_num, cen_ind, cen_pep, Y, Exprs,
 					Gamma, Alpha_pep, Mu, *n_peptide, Sig2, rng[0]);
@@ -556,7 +556,7 @@ void update_censoring(double *W, double *D, int cen_num, int* cen_ind,
 		int *Gamma, double *Alpha, double *Mu, int n_peptide, double *Sig2,
 		RngStream rng)
 {
-	int i, p, k, pos, ind;
+	int i, p, k, ind;
 	double tmp, weight;
 	for(k = 0; k < cen_num; k++)
 	{
@@ -583,7 +583,7 @@ void initialize_chain(double *ProbSum, double *Exprs, double *Y,
 		double **xA, double **xB, double *RB)
 {
 	int c, p, i, g, pep;
-	double u, prob;
+	double prob;
 	for(i = 0; i < *n_indiv; i++)
 	{
 		Mu[i] = 0.0;
@@ -757,7 +757,7 @@ void update_position_p(int* Omega_Ind, double *Omega_Logit,
 		double *xA, double *xB, ARS_workspace *workspace)
 {
 	double s_log_w = 0.0, s_log_1minus_w = 0.0;
-	double frac, R;
+	double R;
 
 	int c, S_p = 0;
 	int num_x = 2;

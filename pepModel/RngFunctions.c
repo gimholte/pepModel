@@ -48,16 +48,15 @@
  * generator used in the pepBayes model, rather than GSL routines.
  */
 
+#include <math.h>
 #include <R.h>
 #include <Rinterface.h>
 #include <R_ext/Error.h>
-#include <math.h>
 #include "RngStream.h"
 #include "RngFunctions.h"
 #include <float.h>
 
-
-#define expmax	(DBL_MAX_EXP * M_LN2)/* = log(DBL_MAX) */
+#define expmax (DBL_MAX_EXP * 0.69314718055994530942)/* = log(DBL_MAX) */
 
 /* position of right-most step */
 #define PARAM_R 3.44428647676
