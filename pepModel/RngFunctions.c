@@ -53,7 +53,7 @@
 #include <R_ext/Error.h>
 #include <math.h>
 #include "RngStream.h"
-#include "norm_gamma_generation.h"
+#include "RngFunctions.h"
 #include <float.h>
 
 

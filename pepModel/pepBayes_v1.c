@@ -16,7 +16,7 @@
 #include <gsl/gsl_sf.h>
 #include <gsl/gsl_math.h>
 
-#include "norm_gamma_generation.h"
+#include "RngFunctions.h"
 #include "RngStream.h"
 #include "ARS.h"
 
