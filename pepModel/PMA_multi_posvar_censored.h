@@ -29,34 +29,35 @@ inline double log_from_logit(double x);
 inline double expit(double x);
 inline double m1expit(double x);
 
-void tnorm_test(double* x, int *n, double *m, double *sigmasqr);
 double truncNorm(double mean, double sigmasqr, RngStream rng);
 
-void store_mcmc_output(double *Alpha, double *Mu, double *A, double *B, double *U, double *Sig2, double *D,
-		double *Theta, double *Omega_Logit, int* Omega_Ind, double kappa, double alpha, double beta,
-		double m, double c_var, double dof, int *n_peptide, int *n_indiv, int *n_position, int *cen_num,
-		double lambda_a, double lambda_b, double a_0, double b_0, int MRF, int ind_pep,
-		FILE *AFILE, FILE *BFILE, FILE *PFILE, FILE *VARFILE, FILE *Sig2FILE, FILE *MUFILE,
-		FILE *DFILE, FILE *THETAFILE, FILE *OFILE, FILE *ALPHAFILE);
+void update_tuning(adpt *tune_set, int i, int n_burn);
 
-void PMA_mcmc_MS(double *Y, double *hyper_param, int *pstart,
+void store_mcmc_output(double *Alpha, double *Mu, double *A, double *B, double *U,
+		double *Sig2, double *D, double *Omega_Logit, int* Omega_Ind, double kappa,
+		double alpha, double beta, double m, double zeta, double dof,
+		int n_peptide, int n_indiv, int n_position, int *cen_num,
+		FILE *AFILE, FILE *BFILE, FILE *PFILE, FILE *VARFILE, FILE *Sig2FILE, FILE *MUFILE,
+		FILE *DFILE, FILE *OFILE, FILE *ALPHAFILE);
+
+void pepbayes_v1(double *Y, double *hyper_param, int *pstart,
 		int *pnum, int *n_position, int *n_peptide, int *n_indiv, int *nP,
 		int *cen_ind, int *cen_pep, int *cen_num, int *cen_pos,
 		int *n_iter, int *n_sweep, int *n_burn,
-		double *OutProbs, double *mean_fitted, int *write,
-		int *silent, int *cladePos, int *n_clade, int *cladeCounts);
+		double *OutProbs, int *write);
 
 void update_global_params(double *m, double *zeta, double *alpha, double *beta, double *kappa,
-		double Mu, double Sig2, double Alpha_pep,
+		double *Mu, double *Sig2, double *Alpha_pep,
 		double m0, double v0, double alpha0, double beta0,
 		int n_indiv, int n_peptide, RngStream rng, adpt *m_tune, adpt *z_tune,
-		ARS_workspace *ws, double *xAlpha);
+		ARS_workspace *ws, double *xAlpha, int nP);
 
 void update_peptide(double *Exprs, double *Mu, double *Alpha_pep, double *W,
 		int *Omega_ind, double *Omega_logit, int *Gamma,
 		double *Sig2_pep, double alpha, double beta,
 		double u, double a, double b,
-		double m, double zeta, int n_indiv, int n_peptide, int pep, RngStream rng);
+		double m, double zeta, double dof, int n_indiv, int n_peptide, int pep,
+		RngStream rng, double *RB);
 
 void update_censoring(double *W, double *D, int cen_num, int* cen_ind,
 		int* cen_pep, double *Y, double *Exprs,
@@ -65,10 +66,10 @@ void update_censoring(double *W, double *D, int cen_num, int* cen_ind,
 
 void initialize_chain(double *ProbSum, double *Exprs, double *Y,
 		double *W, int *Omega_Ind, double *Omega_Logit,
-		double *Alpha_pep, int **Gamma,
+		double *Alpha_pep, int *Gamma,
 		double *Sig2, double *Mu, double *A, double *B, double *U,
 		int *n_position, int *pstart, int *pnum, int *n_peptide, int *n_indiv,
-		double **xA, double **xB);
+		double **xA, double **xB, double *RB);
 
 void update_dof_integrated(double *dof, double *Exprs, double *W,
 		double *Alpha, int *Gamma,
