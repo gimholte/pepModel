@@ -308,8 +308,14 @@ void pepbayes_v1(double *Y, double *hyper_param, int *pstart,
 	return;
 }
 
-void update_global_params(double *m, double *zeta, double *alpha, double *beta, double *kappa,
-		double *Mu, double *Sig2, double *Alpha_pep,
+void update_global_params(double* restrict m,
+		double* restrict zeta,
+		double* restrict alpha,
+		double* restrict beta,
+		double* restrict kappa,
+		double* restrict Mu,
+		double* restrict Sig2,
+		double* restrict Alpha_pep,
 		double m0, double v0, double alpha0, double beta0,
 		int n_indiv, int n_peptide, RngStream rng, adpt *m_tune, adpt *z_tune,
 		ARS_workspace *ws, double *xAlpha, int nP)
@@ -410,12 +416,18 @@ void update_global_params(double *m, double *zeta, double *alpha, double *beta, 
 	return;
 }
 
-void update_peptide(double *Exprs, double *Mu, double *Alpha_pep, double *W,
-		int *Omega_ind, double *Omega_logit, int *Gamma,
-		double *Sig2_pep, double alpha, double beta,
+void update_peptide(double* restrict Exprs,
+		double* restrict Mu,
+		double* restrict Alpha_pep,
+		double* restrict W,
+		int* restrict Omega_ind,
+		double* restrict Omega_logit,
+		int* restrict Gamma,
+		double* restrict Sig2_pep,
+		double alpha, double beta,
 		double u_logit, double a, double b,
 		double m, double zeta, double dof, int n_indiv, int n_peptide, int pep,
-		RngStream rng, double *RB)
+		RngStream rng, double* restrict RB)
 {
 	int i, S = 0;
 	double s_init = 0.0, w_init = 0.0;
@@ -426,8 +438,8 @@ void update_peptide(double *Exprs, double *Mu, double *Alpha_pep, double *W,
 	int d_ind;
 	double SS = 0.0;
 	double delta0, delta1;
-	double w1 = .5 + dof/2.0;
-	double w2 = dof/2.0;
+	const double w1 = .5 + dof/2.0;
+	const double w2 = dof/2.0;
 	double tmp;
 
 	d_ind = pep; // start indexing through large arrays
@@ -485,7 +497,6 @@ void update_peptide(double *Exprs, double *Mu, double *Alpha_pep, double *W,
 		double log_frac = gsl_sf_lnbeta(a, b + n_indiv) - gsl_sf_lnbeta(a, b);
 		*Omega_ind = (logit(RngStream_RandU01(rng)) < (u_logit - log_frac)) ? 0 : 1;
 	}
-
 	// if omega_{cp} > 0, update this.
 	if(*Omega_ind == 1)
 	{
@@ -633,9 +644,14 @@ void initialize_chain(double *ProbSum, double *Exprs, double *Y,
 	return;
 }
 
-void update_dof_integrated(double *dof, double *Exprs, double *W,
-		double *Alpha, int *Gamma,
-		double *Sig2, double *Mu, double *workspace,
+void update_dof_integrated(double* restrict dof,
+		double* restrict Exprs,
+		double* restrict W,
+		double* restrict Alpha,
+		int* restrict Gamma,
+		double* restrict Sig2,
+		double* restrict Mu,
+		double* restrict workspace,
 		int n_indiv, int n_peptide,
 		RngStream rng)
 {
@@ -669,8 +685,7 @@ void update_dof_integrated(double *dof, double *Exprs, double *W,
 			const double sig2 = Sig2[pep];
 			const double alpha = gam*Alpha[pep];
 
-			ds = gsl_pow_2(y - mu - alpha);
-			ds = ds / sig2;
+			ds = gsl_pow_2(y - mu - alpha)/sig2;
 
 			workspace[d_ind] = ds;
 			d_ind++;
@@ -728,9 +743,13 @@ void update_dof_integrated(double *dof, double *Exprs, double *W,
 	return;
 }
 
-void update_indiv_mu(double *Exprs, double *W,
-		double *Alpha_pep, double *mu_j, int *Gamma,
-		double *Sig2, double kappa,
+void update_indiv_mu(double* restrict Exprs,
+		double* restrict W,
+		double* restrict Alpha_pep,
+		double* restrict mu_j,
+		int* restrict Gamma,
+		double* restrict Sig2,
+		double kappa,
 		int n_peptide, int j, RngStream rng)
 {
 	// update Mu_j
@@ -891,25 +910,25 @@ inline double log1m_from_logit(double x)
 	}
 }
 
-double lc_AB(double x, double *argvec, int *arglen)
+double lc_AB(double x, double* restrict argvec, int *arglen)
 {
 	return(-1.0*x*argvec[2] + argvec[0]*lgamma(x + argvec[1]) - argvec[0]*lgamma(x));
 }
 
-double lcp_AB(double x, double *argvec, int *arglen)
+double lcp_AB(double x, double* restrict argvec, int *arglen)
 {
 	return(-1.0*argvec[2] + argvec[0]*gsl_sf_psi(x + argvec[1])
 			- argvec[0]*gsl_sf_psi(x));
 }
 
-double lc_alpha_int(double x, double *argvec, int *arglen)
+double lc_alpha_int(double x, double* restrict argvec, int *arglen)
 {
 	const double Np = argvec[1];
 	return(-argvec[0]*x + lgamma(Np*x + 1.0) - Np*lgamma(x) - Np*x*argvec[2] -
 			x*argvec[3]);
 }
 
-double lcp_alpha_int(double x, double *argvec, int *arglen)
+double lcp_alpha_int(double x, double* restrict argvec, int *arglen)
 {
 
 	const double Np = argvec[1];

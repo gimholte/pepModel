@@ -5,8 +5,8 @@
  *      Author: Gregory Imholte
  */
 
-#ifndef PMA_MULTI_POSVAR_CENSORED_H_
-#define PMA_MULTI_POSVAR_CENSORED_H_
+#ifndef PEPBAYES_V1_H_
+#define PEPBAYES_V1_H_
 
 struct MH_TUNE{
 	int count;
@@ -16,12 +16,12 @@ struct MH_TUNE{
 
 typedef struct MH_TUNE adpt;
 
-double lc_AB(double x, double *argvec, int *arglen);
-double lcp_AB(double x, double *argvec, int *arglen);
+double lc_AB(double x, double* restrict argvec, int *arglen);
+double lcp_AB(double x, double* restrict argvec, int *arglen);
 double lc_alpha(double x, double *argvec, int *arglen);
 double lcp_alpha(double x, double *argvec, int *arglen);
-double lc_alpha_int(double x, double *argvec, int *arglen);
-double lcp_alpha_int(double x, double *argvec, int *arglen);
+double lc_alpha_int(double x, double* restrict argvec, int *arglen);
+double lcp_alpha_int(double x, double* restrict argvec, int *arglen);
 double logit(double x);
 
 inline double log1m_from_logit(double x);
@@ -46,18 +46,30 @@ void pepbayes_v1(double *Y, double *hyper_param, int *pstart,
 		int *n_iter, int *n_sweep, int *n_burn,
 		double *OutProbs, int *write);
 
-void update_global_params(double *m, double *zeta, double *alpha, double *beta, double *kappa,
-		double *Mu, double *Sig2, double *Alpha_pep,
+void update_global_params(double* restrict m,
+		double* restrict zeta,
+		double* restrict alpha,
+		double* restrict beta,
+		double* restrict kappa,
+		double* restrict Mu,
+		double* restrict Sig2,
+		double* restrict Alpha_pep,
 		double m0, double v0, double alpha0, double beta0,
 		int n_indiv, int n_peptide, RngStream rng, adpt *m_tune, adpt *z_tune,
 		ARS_workspace *ws, double *xAlpha, int nP);
 
-void update_peptide(double *Exprs, double *Mu, double *Alpha_pep, double *W,
-		int *Omega_ind, double *Omega_logit, int *Gamma,
-		double *Sig2_pep, double alpha, double beta,
-		double u, double a, double b,
+void update_peptide(double* restrict Exprs,
+		double* restrict Mu,
+		double* restrict Alpha_pep,
+		double* restrict W,
+		int* restrict Omega_ind,
+		double* restrict Omega_logit,
+		int* restrict Gamma,
+		double* restrict Sig2_pep,
+		double alpha, double beta,
+		double u_logit, double a, double b,
 		double m, double zeta, double dof, int n_indiv, int n_peptide, int pep,
-		RngStream rng, double *RB);
+		RngStream rng, double* restrict RB);
 
 void update_censoring(double *W, double *D, int cen_num, int* cen_ind,
 		int* cen_pep, double *Y, double *Exprs,
@@ -71,15 +83,24 @@ void initialize_chain(double *ProbSum, double *Exprs, double *Y,
 		int *n_position, int *pstart, int *pnum, int *n_peptide, int *n_indiv,
 		double **xA, double **xB, double *RB);
 
-void update_dof_integrated(double *dof, double *Exprs, double *W,
-		double *Alpha, int *Gamma,
-		double *Sig2, double *Mu, double *workspace,
+void update_dof_integrated(double* restrict dof,
+		double* restrict Exprs,
+		double* restrict W,
+		double* restrict Alpha,
+		int* restrict Gamma,
+		double* restrict Sig2,
+		double* restrict Mu,
+		double* restrict workspace,
 		int n_indiv, int n_peptide,
 		RngStream rng);
 
-void update_indiv_mu(double *Exprs, double *W,
-		double *Alpha_pep, double *mu_j, int *Gamma,
-		double *Sig2, double kappa,
+void update_indiv_mu(double* restrict Exprs,
+		double* restrict W,
+		double* restrict Alpha_pep,
+		double* restrict mu_j,
+		int* restrict Gamma,
+		double* restrict Sig2,
+		double kappa,
 		int n_peptide, int j, RngStream rng);
 
 void update_position_p(int* Omega_Ind, double *Omega_Logit,
