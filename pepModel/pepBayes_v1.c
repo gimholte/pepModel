@@ -25,7 +25,7 @@
 #define CSTACK_DEFNS 1
 #include <Rinterface.h>
 
-#include "PMA_multi_posvar_censored.h"
+#include "pepBayes_v1.h"
 
 /*
  * individual specific mean, with prior N(0, kappa)
