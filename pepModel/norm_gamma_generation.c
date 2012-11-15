@@ -45,7 +45,7 @@
 
 /*
  * This source code has been further adapted to work with the pseudo-random number
- * generator used in the iBMQ code for eQTL mapping, rather than GSL routines.
+ * generator used in the pepBayes model, rather than GSL routines.
  */
 
 #include <R.h>
