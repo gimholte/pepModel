@@ -9,6 +9,7 @@
 #include <R.h>
 #include <Rmath.h>
 #include "RngStream.h"
+#include <float.h>
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -21,18 +22,11 @@
 #include <Rinterface.h>
 #endif
 
-#include <gsl/gsl_math.h>
-#include <gsl/gsl_sf.h>
-
 // function to test the sampler, not used in main function.
 void check_sample(double x_samp, double *x, ARS_workspace *ws, int *num_x);
 void print_hull(double *x, ARS_workspace *ws, int *num_x);
-double log_apb(double loga, double logb);
 
 /*
-double lc_AB(double x, double* restrict argvec);
-double lcp_AB(double x, double* restrict argvec);
-
 void sample_one(double* start_val, int* n_max, double* S_j, double* c, double* R, double* out,
 		double* eps)
 {
@@ -63,30 +57,6 @@ void sample_one(double* start_val, int* n_max, double* S_j, double* c, double* R
 	return;
 }
 
-
-double lc_AB(double x, double* restrict argvec)
-{
-	double out;
-	const double alpha = argvec[0];
-	const double lambda = argvec[1];
-//	out = -1.0*x*argvec[2] + argvec[0]*lgamma(x + argvec[1]) - argvec[0]*lgamma(x) + argvec[2];
-
-	out = (alpha - 1.0)*log(x) - lambda*x;
-	return(out);
-}
-
-double lcp_AB(double x, double* restrict argvec)
-{
-	double out;
-	const double alpha = argvec[0];
-	const double lambda = argvec[1];
-//	out = -1.0*argvec[2] + argvec[0]*gsl_sf_psi(x + argvec[1]) - argvec[0]*gsl_sf_psi(x);
-
-	out = (alpha - 1.0)/x - lambda;
-	return(out);
-}
-*/
-
 /* Reference:
  * Gilks and Wild (1992)
  * "Adaptive Rejection Sampling for Gibbs Sampling"
@@ -105,7 +75,7 @@ double lcp_AB(double x, double* restrict argvec)
  *
  * x: starting lattice of points
  * num_x: number of starting points
- * nmax: maximum number of points in lattice
+ * NMAX: maximum number of points in lattice (declared in ARS.h)
  *
  * S_j, c, R: parameters from conditional density
  *
@@ -119,19 +89,18 @@ double lcp_AB(double x, double* restrict argvec)
  *
  *
  * rng: random number generator
- * eps: double machine precision value
  */
 
 
 // returns -1.0 if an error is detected.
 double sample_conditional(double* restrict x,
 		int* restrict num_x,
-		int nmax,
 		double* restrict argvec,
+		int* restrict arglen,
 		ARS_workspace *ws,
 		RngStream rng,
-		double eps, double (*h)(double, double *),
-		double (*h_prime)(double , double *))
+		double (*h)(double, double *, int *),
+		double (*h_prime)(double , double *, int *))
 {
 	int i, u_section, l_section;
 	int accept = 0;
@@ -149,8 +118,8 @@ double sample_conditional(double* restrict x,
 	for(i = 0; i < *num_x; i++)
 	{
 		const double xval = x[i];
-		const double nhwv = h(xval, argvec);
-		const double nhpwv = h_prime(xval, argvec);
+		const double nhwv = h(xval, argvec, arglen);
+		const double nhpwv = h_prime(xval, argvec, arglen);
 
 		hwv[i] = nhwv;
 		hpwv[i] = nhpwv;
@@ -164,13 +133,13 @@ double sample_conditional(double* restrict x,
 		const double xnew = x[*num_x - 1] + 2.0;
 		x[*num_x - 1] = xnew;
 
-		const double nhpwv = h_prime(x[*num_x - 1], argvec);
+		const double nhpwv = h_prime(x[*num_x - 1], argvec, arglen);
 		hpwv[*num_x - 1] = nhpwv;
 
 		//ws->hpwv[*num_x - 1] = h_prime(x[*num_x - 1], argvec);
 
 	}
-	hwv[*num_x - 1] = h(x[*num_x - 1], argvec);
+	hwv[*num_x - 1] = h(x[*num_x - 1], argvec, arglen);
 
 	//now calculate intersection of lines, z
 	// i-th element corresponds to intersection to right of x[i]
@@ -193,7 +162,7 @@ double sample_conditional(double* restrict x,
 		// tangents are nearly parallel, use midpoint
 		// approximation to avoid instability
 
-		if((hpwv_i - hpwv_ip1) <= eps)
+		if((hpwv_i - hpwv_ip1) <= DBL_EPSILON)
 		{
 
 			znew = (x_i + x_ip1)/2.0;
@@ -273,7 +242,7 @@ double sample_conditional(double* restrict x,
 			// and compare directly to outer hull.
 			else
 			{
-				hnew = h(x_samp, argvec);
+				hnew = h(x_samp, argvec, arglen);
 				if(log(W) <= (hnew - u))
 				{
 					// sample accepted!
@@ -292,7 +261,7 @@ double sample_conditional(double* restrict x,
 				else
 				{
 					// failed direct comparison, we add the new sampled value to the hull
-					update = update_hull(x, ws, argvec, num_x, nmax,
+					update = update_hull(x, ws, argvec, arglen, num_x,
 							x_samp, hnew, l_section, &huzmax, h, h_prime);
 
 					// if update == 1 we added a new point to the lattice
@@ -308,7 +277,7 @@ double sample_conditional(double* restrict x,
 		{
 			// we're on either the left or right edge or the
 			// hull when sampling here
-			hnew = h(x_samp, argvec);
+			hnew = h(x_samp, argvec, arglen);
 			if(log(W) <= (hnew - u))
 			{
 				// sample accepted
@@ -326,7 +295,7 @@ double sample_conditional(double* restrict x,
 			}
 			else
 			{
-				update = update_hull(x, ws, argvec, num_x, nmax,
+				update = update_hull(x, ws, argvec, arglen, num_x,
 						x_samp, hnew, l_section, &huzmax, h, h_prime);
 				// if update == 1 we added a new point to the lattice
 				// and we must re-normalize the outer hull
@@ -346,15 +315,15 @@ double sample_conditional(double* restrict x,
 int update_hull(double* restrict x,
 		ARS_workspace *ws,
 		double* restrict argvec,
+		int* restrict arglen,
 		int* restrict num_x,
-		int nmax,
 		double xnew,
 		double hnew,
 		int l_section,
 		double* restrict huzmax,
-		double (*h)(double, double *), double (*h_prime)(double , double *))
+		double (*h)(double, double *, int *), double (*h_prime)(double , double *, int*))
 {
-	if(nmax == *num_x)
+	if(NMAX == *num_x)
 	{
 		// not allowed to add more breakpoints;
 		// do not update hull and return to sampler
@@ -367,7 +336,7 @@ int update_hull(double* restrict x,
 	double* restrict z = ws->z;
 	int i;
 
-	hpnew = h_prime(xnew, argvec);
+	hpnew = h_prime(xnew, argvec, arglen);
 	// we are past l_section, so x_samp goes between
 	// x[l_section - 1] and x[l_section]
 

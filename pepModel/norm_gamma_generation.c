@@ -62,7 +62,7 @@
 /* position of right-most step */
 #define PARAM_R 3.44428647676
 
-/* tabulated values for the height of the Ziggurat levels */
+/* tabulated values for the heigt of the Ziggurat levels */
 static const double ytab[128] = {
   1, 0.963598623011, 0.936280813353, 0.913041104253,
   0.892278506696, 0.873239356919, 0.855496407634, 0.838778928349,
