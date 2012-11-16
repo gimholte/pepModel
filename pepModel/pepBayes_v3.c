@@ -432,8 +432,8 @@ void update_peptide(double* restrict Exprs,
 			delta0 = Exprs[d_ind] - mu_pep;
 			delta1 = delta0 - a_pep;
 
-			C = (dof/2.0 + .5)*(log1p(delta0*delta0/(s2_pep*dof)) -
-					log1p(delta1*delta1/(s2_pep*dof)));
+			C = (dof/2.0 + .5)*(log(1.0 + delta0*delta0/(s2_pep*dof)) -
+					log(1.0 + delta1*delta1/(s2_pep*dof)));
 			RB[d_ind] = expit(C + *Omega_logit);
 
 			cur = (RngStream_RandU01(rng) < RB[d_ind]) ? 1 : 0;
@@ -687,15 +687,15 @@ void update_dof_integrated(double* restrict dof,
 			const int gam = Gamma[d_ind];
 			ds = (y - mu - alpha*gam)*(y - mu - alpha*gam)/sig2;
 
-			tmp2 += log1p(ds/2);
-			tmp4 += log1p(ds/4);
-			tmp6 += log1p(ds/6);
-			tmp8 += log1p(ds/8);
-			tmp10 += log1p(ds/10);
-			tmp12 += log1p(ds/12);
-			tmp16 += log1p(ds/16);
-			tmp32 += log1p(ds/32);
-			tmp64 += log1p(ds/64);
+			tmp2 += log(1.0 + ds/2);
+			tmp4 += log(1.0 + ds/4);
+			tmp6 += log(1.0 + ds/6);
+			tmp8 += log(1.0 + ds/8);
+			tmp10 += log(1.0 + ds/10);
+			tmp12 += log(1.0 + ds/12);
+			tmp16 += log(1.0 + ds/16);
+			tmp32 += log(1.0 + ds/32);
+			tmp64 += log(1.0 + ds/64);
 
 			//workspace[d_ind] = ds;
 			d_ind ++;
