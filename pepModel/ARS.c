@@ -7,13 +7,13 @@
 
 #include "ARS.h"
 #include <R.h>
+#include <math.h>
 #include <Rmath.h>
 #include "RngStream.h"
 #include <float.h>
 
 #include <stdlib.h>
 #include <stdio.h>
-#include <math.h>
 #include <Rversion.h>
 
 #if (R_VERSION >= R_Version(2,3,0))

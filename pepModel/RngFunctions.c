@@ -48,6 +48,7 @@
  * generator used in the pepBayes model, rather than GSL routines.
  */
 
+#include <Rmath.h>
 #include <math.h>
 #include <R.h>
 #include <Rinterface.h>

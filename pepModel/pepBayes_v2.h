@@ -8,13 +8,6 @@
 #ifndef PEPBAYES_V2_H_
 #define PEPBAYES_V2_H_
 
-/*
- * PMA_multi_posvar_censored.h
- *
- *  Created on: Nov 2, 2012
- *      Author: Gregory Imholte
- */
-
 struct MH_TUNE{
 	int count;
 	int total_count;
@@ -47,7 +40,7 @@ void store_mcmc_output(double *Alpha, double *Mu, double *A, double *B, double *
 		FILE *AFILE, FILE *BFILE, FILE *PFILE, FILE *VARFILE, FILE *Sig2FILE, FILE *MUFILE,
 		FILE *DFILE, FILE *OFILE, FILE *ALPHAFILE);
 
-void pepbayes_v1(double *Y, double *hyper_param, int *pstart,
+void pepbayes_v2(double *Y, double *hyper_param, int *pstart,
 		int *pnum, int *n_position, int *n_peptide, int *n_indiv, int *nP,
 		int *cen_ind, int *cen_pep, int *cen_num, int *cen_pos,
 		int *n_iter, int *n_sweep, int *n_burn,
